@@ -132,6 +132,9 @@ struct MenuWindowStyler: NSViewRepresentable {
 
     private func apply(to window: NSWindow?) {
         guard let window, let frameView = window.contentView?.superview else { return }
+        // Nothing behind our rounded glass may paint: otherwise the system's smaller corners peek out.
+        window.isOpaque = false
+        window.backgroundColor = .clear
         let mask = MenuWindowStyler.mask(radius)
         for ve in MenuWindowStyler.effectViews(in: frameView) {
             // Same glass as Apple's menu-bar menus (Bluetooth, Wi-Fi): system menu material, live blur.
@@ -142,10 +145,19 @@ struct MenuWindowStyler: NSViewRepresentable {
             ve.maskImage = mask
         }
         window.appearance = nil   // follow the system light / dark appearance
-        frameView.wantsLayer = true
-        frameView.layer?.cornerRadius = radius
-        frameView.layer?.cornerCurve = .continuous
-        frameView.layer?.masksToBounds = true
+        for v in [frameView, window.contentView].compactMap({ $0 }) {
+            v.wantsLayer = true
+            v.layer?.backgroundColor = NSColor.clear.cgColor
+            v.layer?.cornerRadius = radius
+            v.layer?.cornerCurve = .continuous
+            v.layer?.masksToBounds = true
+            v.layer?.borderWidth = 0
+        }
+        // Apple's thin rim, drawn on our own radius.
+        if let layer = frameView.layer {
+            layer.borderColor = NSColor.white.withAlphaComponent(0.14).cgColor
+            layer.borderWidth = 0.5
+        }
         window.invalidateShadow()
     }
 
