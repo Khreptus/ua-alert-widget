@@ -112,7 +112,6 @@ struct MenuBarContent: View {
         }
         .padding(MenuBarContent.inset)
         .padding(.bottom, 2)
-        .environment(\.colorScheme, .dark)
         .background(MenuWindowStyler(radius: MenuBarContent.windowRadius))
     }
 }
@@ -134,7 +133,15 @@ struct MenuWindowStyler: NSViewRepresentable {
     private func apply(to window: NSWindow?) {
         guard let window, let frameView = window.contentView?.superview else { return }
         let mask = MenuWindowStyler.mask(radius)
-        for ve in MenuWindowStyler.effectViews(in: frameView) { ve.maskImage = mask }
+        for ve in MenuWindowStyler.effectViews(in: frameView) {
+            // Same glass as Apple's menu-bar menus (Bluetooth, Wi-Fi): system menu material, live blur.
+            ve.material = .menu
+            ve.blendingMode = .behindWindow
+            ve.state = .active
+            ve.isEmphasized = false
+            ve.maskImage = mask
+        }
+        window.appearance = nil   // follow the system light / dark appearance
         frameView.wantsLayer = true
         frameView.layer?.cornerRadius = radius
         frameView.layer?.cornerCurve = .continuous
