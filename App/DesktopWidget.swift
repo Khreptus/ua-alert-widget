@@ -25,7 +25,7 @@ final class DesktopWidgetController {
         guard show else { panel?.orderOut(nil); return }
         let p = panel ?? makePanel()
         let pt = size.size
-        let frameSize = NSSize(width: pt.width * scale + 40, height: pt.height * scale + 40) // room for shadow
+        let frameSize = NSSize(width: pt.width * scale, height: pt.height * scale)
         var f = p.frame
         f.origin.y += f.size.height - frameSize.height  // keep top-left corner
         f.size = frameSize
@@ -45,7 +45,7 @@ final class DesktopWidgetController {
         p.isMovableByWindowBackground = true
         p.hidesOnDeactivate = false
         p.isReleasedWhenClosed = false
-        p.contentView = NSHostingView(rootView: DesktopWidgetRoot().environmentObject(AppModel.shared).environmentObject(Prefs.shared))
+        p.contentView = DraggableHostingView(rootView: DesktopWidgetRoot().environmentObject(AppModel.shared).environmentObject(Prefs.shared))
         p.setFrameAutosaveName("UAAlertDesktopWidget")
         if !p.setFrameUsingName("UAAlertDesktopWidget"), let screen = NSScreen.main {
             let v = screen.visibleFrame
@@ -82,9 +82,9 @@ struct DesktopWidgetRoot: View {
         .background(AlertWidgetBackground(alarm: alarm))
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.white.opacity(alarm ? 0.18 : 0.08), lineWidth: 1))
-        .shadow(color: alarm ? Theme.red.opacity(0.45) : .black.opacity(0.4), radius: 16, y: 8)
         .scaleEffect(prefs.widgetScale, anchor: .center)
-        .frame(width: size.size.width * prefs.widgetScale + 40, height: size.size.height * prefs.widgetScale + 40)
+        .frame(width: size.size.width * prefs.widgetScale, height: size.size.height * prefs.widgetScale)
+        .gesture(WindowDragGesture.make())
         .contextMenu {
             Button("Налаштування…") { AppDelegate.shared?.showSettings() }
             Picker("Розмір", selection: $prefs.widgetSize) { ForEach(WidgetSize.allCases) { Text($0.title).tag($0) } }
@@ -92,5 +92,37 @@ struct DesktopWidgetRoot: View {
             Divider()
             Button("Сховати віджет") { prefs.showDesktopWidget = false }
         }
+    }
+}
+
+
+/// Hosting view that lets the borderless window be dragged by its background.
+final class DraggableHostingView<Content: View>: NSHostingView<Content> {
+    override var mouseDownCanMoveWindow: Bool { true }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
+/// Moves the window that contains the view while the user drags anywhere on the widget.
+enum WindowDragGesture {
+    private static var startMouse: NSPoint = .zero
+    private static var startOrigin: NSPoint = .zero
+    private static weak var window: NSWindow?
+
+    static func make() -> some Gesture {
+        DragGesture(minimumDistance: 2, coordinateSpace: .global)
+            .onChanged { _ in
+                let mouse = NSEvent.mouseLocation
+                if window == nil {
+                    window = NSApp.windows.first { $0 is DesktopPanel && $0.frame.contains(mouse) } ?? NSApp.windows.first { $0 is DesktopPanel }
+                    startMouse = mouse
+                    startOrigin = window?.frame.origin ?? .zero
+                }
+                guard let w = window else { return }
+                w.setFrameOrigin(NSPoint(x: startOrigin.x + mouse.x - startMouse.x, y: startOrigin.y + mouse.y - startMouse.y))
+            }
+            .onEnded { _ in
+                window?.saveFrame(usingName: "UAAlertDesktopWidget")
+                window = nil
+            }
     }
 }
