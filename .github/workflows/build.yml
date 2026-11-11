@@ -1,0 +1,57 @@
+name: Build DMG
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild -project UAAlert.xcodeproj -target UAAlert -configuration Release \
+            SYMROOT="$PWD/build" \
+            CODE_SIGN_IDENTITY="-" CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="" \
+            build 2>&1 | tee build.log | grep -E "error:|warning: unre|BUILD (SUCCEEDED|FAILED)" || true
+          test -d "build/Release/UA Alert.app"
+
+      - name: Show errors
+        if: failure()
+        run: grep -E "error:" -A3 build.log | head -200 || true
+
+      - name: Package DMG
+        run: |
+          APP="build/Release/UA Alert.app"
+          codesign --verify --deep --verbose=2 "$APP" || true
+          mkdir -p dmg
+          cp -R "$APP" dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "UA Alert" -srcfolder dmg -ov -format UDZO UA-Alert.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: UA-Alert-dmg
+          path: UA-Alert.dmg
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "build-${{ github.run_number }}" UA-Alert.dmg \
+            --title "UA Alert — збірка ${{ github.run_number }}" \
+            --notes "Автоматична збірка з коміту ${{ github.sha }}. Завантажте UA-Alert.dmg нижче." \
+            --latest

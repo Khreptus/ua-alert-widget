@@ -1,0 +1,68 @@
+name: UAAlert
+options:
+  bundleIdPrefix: com.khreptus
+  deploymentTarget:
+    macOS: "14.0"
+  developmentLanguage: uk
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: NO
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+targets:
+  UAAlert:
+    type: application
+    platform: macOS
+    sources:
+      - App
+      - Shared
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: "Тривога UA"
+        CFBundleName: "UA Alert"
+        LSUIElement: true
+        LSApplicationCategoryType: public.app-category.utilities
+        NSHumanReadableCopyright: "Дані: map.ukrainealarm.com, dimap.live, radarua.com"
+        CFBundleURLTypes:
+          - CFBundleURLName: com.khreptus.uaalert
+            CFBundleURLSchemes: [uaalert]
+    entitlements:
+      path: App/App.entitlements
+      properties:
+        com.apple.security.network.client: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.khreptus.uaalert
+        PRODUCT_NAME: "UA Alert"
+        PRODUCT_MODULE_NAME: UAAlert
+    dependencies:
+      - target: UAAlertWidget
+        embed: true
+  UAAlertWidget:
+    type: app-extension
+    platform: macOS
+    sources:
+      - Widget
+      - Shared
+    info:
+      path: Widget/Info.plist
+      properties:
+        CFBundleDisplayName: "Тривога UA"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widget/Widget.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.khreptus.uaalert.widget
+        PRODUCT_NAME: UAAlertWidget
+        SKIP_INSTALL: YES
