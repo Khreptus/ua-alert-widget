@@ -81,6 +81,16 @@ struct MenuBarContent: View {
                 Button { model.stopSiren() } label: { Label("Вимкнути сирену", systemImage: "speaker.slash.fill").frame(maxWidth: .infinity) }
                     .controlSize(.large).buttonStyle(.borderedProminent).tint(Theme.red)
             }
+            Link(destination: URL(string: "https://map.ukrainealarm.com/")!) {
+                HStack(spacing: 4) {
+                    Text("Офіційний сайт")
+                    Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .semibold))
+                }
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.blue)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Divider()
             HStack {
                 Toggle("Віджет на столі", isOn: $prefs.showDesktopWidget).toggleStyle(.switch).controlSize(.small)
                 Spacer()
