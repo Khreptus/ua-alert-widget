@@ -1,5 +1,7 @@
 import AppKit
+import CoreServices
 import SwiftUI
+import WidgetKit
 
 @main
 struct UAAlertApp: App {
@@ -26,6 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
         NSApp.setActivationPolicy(.accessory)
+        // Make sure LaunchServices knows this bundle (and its widget extension) so the widget shows up in the gallery.
+        LSRegisterURL(Bundle.main.bundleURL as CFURL, true)
+        WidgetCenter.shared.reloadAllTimelines()
         AppModel.shared.start()
         desktop.setup()
     }

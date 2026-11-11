@@ -50,6 +50,8 @@ jobs:
           mkdir -p dmg
           cp -R "$APP" dmg/
           ln -s /Applications dmg/Applications
+          cp "scripts/Додати віджет.command" dmg/
+          chmod +x "dmg/Додати віджет.command"
           hdiutil create -volname "UA Alert" -srcfolder dmg -ov -format UDZO UA-Alert.dmg
           shasum -a 256 UA-Alert.dmg | tee UA-Alert.dmg.sha256
 
