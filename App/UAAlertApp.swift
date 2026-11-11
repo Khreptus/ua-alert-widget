@@ -31,9 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
-        for u in urls where u.scheme == "uaalert" {
-            if u.host == "mute" { AppModel.shared.stopSiren() } else { showSettings() }
-        }
+        // Only opens settings. Never let an external link silence the siren or change settings.
+        if urls.contains(where: { $0.scheme == "uaalert" }) { showSettings() }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

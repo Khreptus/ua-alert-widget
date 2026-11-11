@@ -19,13 +19,14 @@ enum Net {
     }()
 
     static func json(_ urlString: String, site: String) async throws -> Any {
-        guard let url = URL(string: urlString) else { throw NetError.badJSON }
+        guard let url = URL(string: urlString), url.scheme == "https" else { throw NetError.badJSON }
         var r = URLRequest(url: url)
         r.setValue(site + "/", forHTTPHeaderField: "Referer")
         r.setValue(site, forHTTPHeaderField: "Origin")
         let (data, resp) = try await session.data(for: r)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
         guard (200..<300).contains(code) else { throw NetError.status(code) }
+        guard data.count < 8_000_000 else { throw NetError.badJSON }   // refuse oversized responses
         return try JSONSerialization.jsonObject(with: data)
     }
 }

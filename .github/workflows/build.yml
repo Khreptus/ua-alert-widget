@@ -13,6 +13,8 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -41,6 +43,7 @@ jobs:
           cp -R "$APP" dmg/
           ln -s /Applications dmg/Applications
           hdiutil create -volname "UA Alert" -srcfolder dmg -ov -format UDZO UA-Alert.dmg
+          shasum -a 256 UA-Alert.dmg | tee UA-Alert.dmg.sha256
 
       - uses: actions/upload-artifact@v4
         with:
@@ -51,7 +54,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "build-${{ github.run_number }}" UA-Alert.dmg \
+          SHA=$(cut -d' ' -f1 UA-Alert.dmg.sha256)
+          gh release create "build-${{ github.run_number }}" UA-Alert.dmg UA-Alert.dmg.sha256 \
             --title "UA Alert — збірка ${{ github.run_number }}" \
-            --notes "Автоматична збірка з коміту ${{ github.sha }}. Завантажте UA-Alert.dmg нижче." \
+            --notes "Автоматична збірка з коміту ${{ github.sha }}. SHA-256: $SHA" \
             --latest
