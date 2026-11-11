@@ -281,3 +281,55 @@ public struct MoreDots: View {
             .contentShape(Circle())
     }
 }
+
+// MARK: - Compact strip
+
+public struct StripView: View {
+    let m: WidgetModel
+    let more: AnyView?
+    let pinned: Bool
+    let sirenPlaying: Bool
+    let onMute: (() -> Void)?
+
+    public static let size = CGSize(width: 340, height: 36)
+
+    public init(model: WidgetModel, more: AnyView?, pinned: Bool, sirenPlaying: Bool = false, onMute: (() -> Void)? = nil) {
+        self.m = model; self.more = more; self.pinned = pinned; self.sirenPlaying = sirenPlaying; self.onMute = onMute
+    }
+
+    public var body: some View {
+        let st = m.status
+        let alarm = m.isAlarm
+        let (title, color) = StateText.title(st)
+        let sum = m.snapshot.summary()
+        HStack(spacing: 8) {
+            if alarm || st?.highThreat == true {
+                SirenIcon(size: 14).foregroundStyle(alarm ? .white : Theme.amber)
+            } else {
+                Circle().fill(color).frame(width: 8, height: 8)
+            }
+            Text(m.city?.displayName ?? "Оберіть місто")
+                .font(.system(size: 13, weight: .semibold)).foregroundStyle(alarm ? .white : Theme.text).lineLimit(1)
+            Text(alarm ? (Fmt.duration(since: st?.since, now: m.now).map { "Тривога · \($0)" } ?? "Тривога") : title)
+                .font(.system(size: 13, weight: .semibold)).foregroundStyle(alarm ? .white : color).lineLimit(1).monospacedDigit()
+            Spacer(minLength: 4)
+            if alarm, sirenPlaying, let onMute {
+                Button(action: onMute) { Image(systemName: "speaker.slash.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(Color(hex: 0xB3140F)).frame(width: 24, height: 22).background(Capsule().fill(.white)) }
+                    .buttonStyle(.plain).help("Вимкнути звук")
+            } else {
+                Text("\(sum.alertRaions) р-н\(m.showTargets ? " · \(sum.targets) ц." : "")")
+                    .font(.system(size: 11, weight: .medium)).foregroundStyle(alarm ? .white.opacity(0.75) : Theme.tertiary).monospacedDigit().lineLimit(1)
+            }
+            if pinned { Image(systemName: "pin.fill").font(.system(size: 10, weight: .semibold)).foregroundStyle(alarm ? .white.opacity(0.8) : Theme.secondary).rotationEffect(.degrees(45)) }
+            if let more { more.scaleEffect(0.85) }
+        }
+        .padding(.leading, 12).padding(.trailing, 6)
+        .frame(width: StripView.size.width, height: StripView.size.height)
+        .background(
+            Capsule().fill(LinearGradient(colors: alarm ? [Theme.alarmTop, Theme.alarmBottom] : [Color(hex: 0x262629), Theme.bgBottom], startPoint: .top, endPoint: .bottom))
+        )
+        .overlay(Capsule().strokeBorder(.white.opacity(alarm ? 0.2 : 0.09), lineWidth: 1))
+        .contentShape(Capsule())
+        .environment(\.colorScheme, .dark)
+    }
+}

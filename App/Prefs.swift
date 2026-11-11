@@ -21,6 +21,7 @@ final class Prefs: ObservableObject {
     @Published var widgetSize: WidgetSize { didSet { d.set(widgetSize.rawValue, forKey: "widgetSize") } }
     @Published var widgetScale: Double { didSet { d.set(widgetScale, forKey: "widgetScale") } }
     @Published var widgetOnTop: Bool { didSet { d.set(widgetOnTop, forKey: "widgetOnTop") } }
+    @Published var compactMode: Bool { didSet { d.set(compactMode, forKey: "compactMode") } }
 
     private init() {
         d.register(defaults: [
@@ -28,7 +29,7 @@ final class Prefs: ObservableObject {
             "showTargets": true, "showThreat": true, "mapMode": MapMode.raions.rawValue,
             "sirenOnAlert": true, "sirenOnHighThreat": true, "bannerOnThreat": false, "chimeOnClear": true,
             "volume": 0.8, "sirenSeconds": 30.0,
-            "showDesktopWidget": true, "widgetSize": WidgetSize.large.rawValue, "widgetScale": 1.0, "widgetOnTop": false,
+            "showDesktopWidget": true, "widgetSize": WidgetSize.large.rawValue, "widgetScale": 1.0, "widgetOnTop": false, "compactMode": true,
         ])
         cityID = d.string(forKey: "cityID") ?? ""
         showTargets = d.bool(forKey: "showTargets")
@@ -44,6 +45,7 @@ final class Prefs: ObservableObject {
         widgetSize = WidgetSize(rawValue: d.string(forKey: "widgetSize") ?? "") ?? .large
         widgetScale = d.double(forKey: "widgetScale")
         widgetOnTop = d.bool(forKey: "widgetOnTop")
+        compactMode = d.bool(forKey: "compactMode")
     }
 
     var city: Hromada? { GeoStore.shared.hromada(id: cityID) ?? GeoStore.shared.defaultCity }

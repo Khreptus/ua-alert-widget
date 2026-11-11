@@ -60,7 +60,7 @@ struct MenuBarLabel: View {
         let st = model.status
         let alarm = st?.level == .alert
         HStack(spacing: 3) {
-            Image(systemName: alarm ? "light.beacon.max.fill" : (st?.highThreat == true || st?.level == .threat ? "exclamationmark.triangle.fill" : "shield.lefthalf.filled"))
+            Image(systemName: alarm || st?.highThreat == true ? "light.beacon.max.fill" : "light.beacon.max")
             if alarm, let d = Fmt.duration(since: st?.since, now: model.now) { Text(d).monospacedDigit() }
         }
     }

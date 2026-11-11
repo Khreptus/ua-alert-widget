@@ -84,6 +84,7 @@ struct WidgetSettingsPopover: View {
                     Picker("", selection: $prefs.mapMode) { ForEach(MapMode.allCases) { Text($0.title).tag($0) } }
                         .pickerStyle(.segmented).labelsHidden().frame(width: 150)
                 }
+                toggleRow("Компактний рядок", "Наведіть — розгорнеться, клік — закріпити", $prefs.compactMode)
                 row("Розмір") {
                     Picker("", selection: $prefs.widgetSize) { ForEach(WidgetSize.allCases) { Text($0.title).tag($0) } }
                         .pickerStyle(.segmented).labelsHidden().frame(width: 150)
@@ -178,6 +179,7 @@ struct SettingsView: View {
             Form {
                 Section("Віджет на робочому столі") {
                     Toggle("Показувати віджет", isOn: $prefs.showDesktopWidget)
+                    Toggle("Компактний рядок (розгортається при наведенні, клік — закріпити)", isOn: $prefs.compactMode)
                     Picker("Розмір", selection: $prefs.widgetSize) { Text("Малий").tag(WidgetSize.small); Text("Середній").tag(WidgetSize.medium); Text("Великий").tag(WidgetSize.large) }
                     Picker("Масштаб", selection: $prefs.widgetScale) { Text("100%").tag(1.0); Text("125%").tag(1.25); Text("150%").tag(1.5) }
                     Toggle("Поверх усіх вікон", isOn: $prefs.widgetOnTop)

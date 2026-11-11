@@ -41,6 +41,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.khreptus.uaalert
         PRODUCT_NAME: "UA Alert"
         PRODUCT_MODULE_NAME: UAAlert
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       - target: UAAlertWidget
         embed: true
