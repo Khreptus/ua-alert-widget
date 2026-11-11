@@ -10,12 +10,8 @@ struct UAAlertApp: App {
     @StateObject private var prefs = Prefs.shared
 
     var body: some Scene {
-        MenuBarExtra {
-            MenuBarContent().environmentObject(model).environmentObject(prefs)
-        } label: {
-            MenuBarLabel().environmentObject(model)
-        }
-        .menuBarExtraStyle(.window)
+        // The menu-bar item and its drop-down are our own (StatusBarController).
+        Settings { EmptyView() }
     }
 }
 
@@ -23,6 +19,7 @@ struct UAAlertApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static weak var shared: AppDelegate?
     private let desktop = DesktopWidgetController()
+    private let statusBar = StatusBarController()
     private var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -33,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         WidgetCenter.shared.reloadAllTimelines()
         AppModel.shared.start()
         desktop.setup()
+        statusBar.setup()
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -43,6 +41,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         showSettings(); return true
     }
+
+    func closeMenu() { statusBar.close() }
 
     func showSettings() {
         if settingsWindow == nil {
@@ -75,7 +75,7 @@ struct MenuBarContent: View {
     @EnvironmentObject var prefs: Prefs
 
     /// Outer radius of the drop-down window (Apple-style, concentric with the card inside).
-    static let windowRadius: CGFloat = 26
+    static let windowRadius: CGFloat = StatusBarController.radius
     static let inset: CGFloat = 10
     static let cardRadius: CGFloat = windowRadius - inset
 
@@ -104,7 +104,7 @@ struct MenuBarContent: View {
             HStack {
                 Toggle("Віджет на столі", isOn: $prefs.showDesktopWidget).toggleStyle(.switch).controlSize(.small)
                 Spacer()
-                Button("Налаштування…") { AppDelegate.shared?.showSettings() }
+                Button("Налаштування…") { AppDelegate.shared?.closeMenu(); AppDelegate.shared?.showSettings() }
                 Button("Вийти") { NSApp.terminate(nil) }
             }
             .font(.system(size: 12))
@@ -112,71 +112,7 @@ struct MenuBarContent: View {
         }
         .padding(MenuBarContent.inset)
         .padding(.bottom, 2)
-        .background(MenuWindowStyler(radius: MenuBarContent.windowRadius))
+        .fixedSize()
     }
 }
 
-/// Rounds the MenuBarExtra drop-down window like Apple's own menu-bar panels.
-struct MenuWindowStyler: NSViewRepresentable {
-    let radius: CGFloat
-
-    func makeNSView(context: Context) -> NSView {
-        let v = NSView()
-        DispatchQueue.main.async { apply(to: v.window) }
-        return v
-    }
-
-    func updateNSView(_ v: NSView, context: Context) {
-        DispatchQueue.main.async { apply(to: v.window) }
-    }
-
-    private func apply(to window: NSWindow?) {
-        guard let window, let frameView = window.contentView?.superview else { return }
-        // Nothing behind our rounded glass may paint: otherwise the system's smaller corners peek out.
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        let mask = MenuWindowStyler.mask(radius)
-        for ve in MenuWindowStyler.effectViews(in: frameView) {
-            // Same glass as Apple's menu-bar menus (Bluetooth, Wi-Fi): system menu material, live blur.
-            ve.material = .menu
-            ve.blendingMode = .behindWindow
-            ve.state = .active
-            ve.isEmphasized = false
-            ve.maskImage = mask
-        }
-        window.appearance = nil   // follow the system light / dark appearance
-        for v in [frameView, window.contentView].compactMap({ $0 }) {
-            v.wantsLayer = true
-            v.layer?.backgroundColor = NSColor.clear.cgColor
-            v.layer?.cornerRadius = radius
-            v.layer?.cornerCurve = .continuous
-            v.layer?.masksToBounds = true
-            v.layer?.borderWidth = 0
-        }
-        // Apple's thin rim, drawn on our own radius.
-        if let layer = frameView.layer {
-            layer.borderColor = NSColor.white.withAlphaComponent(0.14).cgColor
-            layer.borderWidth = 0.5
-        }
-        window.invalidateShadow()
-    }
-
-    private static func effectViews(in v: NSView) -> [NSVisualEffectView] {
-        var out: [NSVisualEffectView] = []
-        if let e = v as? NSVisualEffectView { out.append(e) }
-        for s in v.subviews { out += effectViews(in: s) }
-        return out
-    }
-
-    static func mask(_ r: CGFloat) -> NSImage {
-        let side = r * 2 + 1
-        let img = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
-            NSColor.black.setFill()
-            NSBezierPath(roundedRect: rect, xRadius: r, yRadius: r).fill()
-            return true
-        }
-        img.capInsets = NSEdgeInsets(top: r, left: r, bottom: r, right: r)
-        img.resizingMode = .stretch
-        return img
-    }
-}
