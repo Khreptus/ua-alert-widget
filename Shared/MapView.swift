@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 public enum MapMode: String, CaseIterable, Identifiable, Sendable {
     case raions, oblasts
@@ -11,16 +12,24 @@ public enum Theme {
     public static let amber = Color(hex: 0xFF9F0A)
     public static let green = Color(hex: 0x30D158)
     public static let blue = Color(hex: 0x0A84FF)
-    public static let idle = Color(hex: 0x2C2C2F)
-    public static let raionBorder = Color(hex: 0x141416)
-    public static let oblastBorder = Color(hex: 0x0B0B0D)
-    public static let text = Color(hex: 0xF2F2F7)
-    public static let secondary = Color(hex: 0x8E8E93)
-    public static let tertiary = Color(hex: 0x636368)
+    /// Colours below adapt to light / dark appearance (the desktop widget forces dark).
+    public static let idle = dyn(0x2C2C2F, 0xD5D5DA)
+    public static let raionBorder = dyn(0x141416, 0xF4F4F6)
+    public static let oblastBorder = dyn(0x0B0B0D, 0xFFFFFF)
+    public static let text = Color(nsColor: .labelColor)
+    public static let secondary = Color(nsColor: .secondaryLabelColor)
+    public static let tertiary = Color(nsColor: .tertiaryLabelColor)
     public static let bgTop = Color(hex: 0x222225)
     public static let bgBottom = Color(hex: 0x141416)
     public static let alarmTop = Color(hex: 0xD7261E)
     public static let alarmBottom = Color(hex: 0x8E1410)
+
+    public static func dyn(_ dark: UInt32, _ light: UInt32) -> Color {
+        Color(nsColor: NSColor(name: nil) { ap in
+            let h = ap.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+            return NSColor(srgbRed: CGFloat((h >> 16) & 0xFF) / 255, green: CGFloat((h >> 8) & 0xFF) / 255, blue: CGFloat(h & 0xFF) / 255, alpha: 1)
+        })
+    }
 
     public static func color(_ l: AlertLevel, showThreat: Bool = true) -> Color {
         switch l {

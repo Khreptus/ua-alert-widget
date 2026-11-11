@@ -70,40 +70,98 @@ struct MenuBarLabel: View {
     }
 }
 
+/// Menu-bar window styled like Apple's own menu extras (Bluetooth, Wi-Fi): system material, no inner card.
 struct MenuBarContent: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var prefs: Prefs
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         let wm = model.widgetModel
-        VStack(spacing: 10) {
-            AlertWidgetView(model: wm, size: .large, more: nil, sirenPlaying: model.sirenPlaying, onMute: { model.stopSiren() })
-                .frame(width: 364, height: 382)
-                .background(AlertWidgetBackground(alarm: false))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            if model.sirenPlaying {
-                Button { model.stopSiren() } label: { Label("Вимкнути сирену", systemImage: "speaker.slash.fill").frame(maxWidth: .infinity) }
-                    .controlSize(.large).buttonStyle(.borderedProminent).tint(Theme.red)
-            }
-            Link(destination: URL(string: "https://map.ukrainealarm.com/")!) {
-                HStack(spacing: 4) {
-                    Text("Офіційний сайт")
-                    Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .semibold))
-                }
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Theme.blue)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Divider()
-            HStack {
-                Toggle("Віджет на столі", isOn: $prefs.showDesktopWidget).toggleStyle(.switch).controlSize(.small)
+        let sum = wm.snapshot.summary()
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Повітряні тривоги").font(.system(size: 13, weight: .bold))
                 Spacer()
-                Button("Налаштування…") { AppDelegate.shared?.showSettings() }
-                Button("Вийти") { NSApp.terminate(nil) }
+                LivePill(time: wm.snapshot.updated, noData: wm.noData)
             }
-            .font(.system(size: 12))
+            .padding(.horizontal, 14).padding(.top, 8)
+            Text(summary(sum, wm)).font(.system(size: 11)).foregroundStyle(.secondary)
+                .padding(.horizontal, 14).padding(.top, 1)
+
+            UAMapView(snapshot: wm.snapshot, city: wm.city, showTargets: wm.showTargets, showThreat: wm.showThreat, mode: wm.mode,
+                      pinColor: wm.isAlarm ? Theme.red : Theme.blue)
+                .padding(.horizontal, 12).padding(.vertical, 8)
+
+            CityRow(m: wm).padding(.horizontal, 14)
+            HStack { Spacer(); LegendView(showTargets: wm.showTargets) }.padding(.horizontal, 14).padding(.top, 6)
+
+            MenuSeparator()
+            if model.sirenPlaying {
+                MenuRow(title: "Вимкнути сирену", systemImage: "speaker.slash.fill", tint: Theme.red) { model.stopSiren() }
+            }
+            MenuToggleRow(title: "Віджет на робочому столі", isOn: $prefs.showDesktopWidget)
+            MenuRow(title: "Офіційний сайт", trailing: "arrow.up.right") { openURL(URL(string: "https://map.ukrainealarm.com/")!) }
+            MenuSeparator()
+            MenuRow(title: "Налаштування…") { AppDelegate.shared?.showSettings() }
+            MenuRow(title: "Вийти з UA Alert") { NSApp.terminate(nil) }
         }
-        .padding(12)
-        .environment(\.colorScheme, .dark)
+        .padding(.vertical, 6)
+        .frame(width: 340)
+    }
+
+    private func summary(_ s: Snapshot.Summary, _ m: WidgetModel) -> String {
+        var parts = ["\(s.alertRaions) \(Fmt.plural(s.alertRaions, "район", "райони", "районів"))"]
+        if m.showThreat { parts.append("\(s.threatRaions) загроза") }
+        if m.showTargets { parts.append("\(s.targets) \(Fmt.plural(s.targets, "ціль", "цілі", "цілей"))") }
+        return parts.joined(separator: " · ")
+    }
+}
+
+struct MenuSeparator: View {
+    var body: some View {
+        Rectangle().fill(Color.primary.opacity(0.1)).frame(height: 1).padding(.horizontal, 14).padding(.vertical, 5)
+    }
+}
+
+/// A row that highlights on hover like a native menu item.
+struct MenuRow: View {
+    let title: String
+    var systemImage: String? = nil
+    var trailing: String? = nil
+    var tint: Color? = nil
+    let action: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if let systemImage { Image(systemName: systemImage).frame(width: 16) }
+                Text(title).font(.system(size: 13))
+                Spacer()
+                if let trailing { Image(systemName: trailing).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary) }
+            }
+            .foregroundStyle(tint ?? .primary)
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(hover ? Color.primary.opacity(0.1) : .clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hover = $0 }
+        .padding(.horizontal, 6)
+    }
+}
+
+struct MenuToggleRow: View {
+    let title: String
+    @Binding var isOn: Bool
+    var body: some View {
+        HStack {
+            Text(title).font(.system(size: 13))
+            Spacer()
+            Toggle("", isOn: $isOn).toggleStyle(.switch).labelsHidden().controlSize(.small)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 3)
     }
 }

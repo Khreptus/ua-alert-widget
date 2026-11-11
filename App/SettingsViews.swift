@@ -166,9 +166,9 @@ struct SettingsView: View {
                     Toggle("🔴 Сирена при масштабній тривозі", isOn: $prefs.sirenOnAlert)
                     Toggle("🟡 Сирена при загрозі дронів / ракет", isOn: $prefs.sirenOnThreat)
                     Toggle("🟡 Банер при загрозі (без звуку)", isOn: $prefs.bannerOnThreat)
-                    Toggle("Сирена при високій загрозі (ціль летить у бік міста)", isOn: $prefs.sirenOnHighThreat)
                     Toggle("Банер про доразвідку перед відбоєм", isOn: $prefs.notifyRecon)
                     Toggle("Тихий сигнал при відбої", isOn: $prefs.chimeOnClear)
+                    Text("Сирена звучить лише коли ваш район зафарбовується на карті, і ніколи — коли Mac у режимі сну.").font(.caption).foregroundStyle(.secondary)
                     HStack { Text("Гучність"); Slider(value: $prefs.volume, in: 0...1) }
                     Picker("Тривалість сирени", selection: $prefs.sirenSeconds) {
                         Text("10 с").tag(10.0); Text("30 с").tag(30.0); Text("1 хв").tag(60.0); Text("2 хв").tag(120.0)

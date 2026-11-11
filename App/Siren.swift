@@ -6,6 +6,7 @@ final class Siren: @unchecked Sendable {
     private let engine = AVAudioEngine()
     private var node: AVAudioSourceNode?
     private var stopItem: DispatchWorkItem?
+    private var player: AVAudioPlayer?
     private(set) var isPlaying = false
 
     private final class State { var phase = 0.0; var t = 0.0 }
@@ -14,6 +15,20 @@ final class Siren: @unchecked Sendable {
 
     func play(_ sound: Sound = .siren, seconds: Double, volume: Double) {
         stop()
+        if sound == .siren, let url = Bundle.main.url(forResource: "siren", withExtension: "m4a"),
+           let p = try? AVAudioPlayer(contentsOf: url) {
+            p.numberOfLoops = -1
+            p.volume = Float(max(0, min(1, volume)))
+            p.prepareToPlay()
+            if p.play() {
+                player = p
+                isPlaying = true
+                let item = DispatchWorkItem { [weak self] in self?.stop() }
+                stopItem = item
+                DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: item)
+                return
+            }
+        }
         let out = engine.outputNode.outputFormat(forBus: 0)
         let sr = out.sampleRate > 0 ? out.sampleRate : 44_100
         guard let fmt = AVAudioFormat(standardFormatWithSampleRate: sr, channels: 1) else { return }
@@ -60,6 +75,7 @@ final class Siren: @unchecked Sendable {
 
     func stop() {
         stopItem?.cancel(); stopItem = nil
+        player?.stop(); player = nil
         if engine.isRunning { engine.stop() }
         if let n = node { engine.detach(n) }
         node = nil

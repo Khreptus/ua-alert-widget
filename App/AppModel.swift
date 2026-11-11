@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 import UserNotifications
@@ -22,6 +23,10 @@ final class AppModel: ObservableObject {
     private var lastHigh = false
     private var lastCityID = ""
     private var lastWidgetReload = Date.distantPast
+    /// Mac (or its display) is asleep → never play the siren.
+    private var asleep = false
+    /// After waking up, take the current state as the new baseline (no siren for what happened during sleep).
+    private var rebaseline = false
 
     var city: Hromada? { prefs.city }
     var status: CityStatus? { city.map { snapshot.status(for: $0) } }
@@ -30,7 +35,24 @@ final class AppModel: ObservableObject {
         WidgetModel(snapshot: snapshot, city: city, showTargets: prefs.showTargets, showThreat: prefs.showThreat, mode: prefs.mapMode, now: now)
     }
 
+    private func observeSleep() {
+        let nc = NSWorkspace.shared.notificationCenter
+        nc.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.asleep = true; self?.stopSiren() }
+        }
+        nc.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.asleep = true; self?.stopSiren() }
+        }
+        nc.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.asleep = false; self?.rebaseline = true; await self?.refresh() }
+        }
+        nc.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.asleep = false; self?.rebaseline = true }
+        }
+    }
+
     func start() {
+        observeSleep()
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
         Task { await refresh() }
         timer = Timer.scheduledTimer(withTimeInterval: 6, repeats: true) { [weak self] _ in
@@ -88,6 +110,16 @@ final class AppModel: ObservableObject {
             reloadWidgets(force: true)
             return
         }
+        if rebaseline {
+            // Just woke up: silent summary only.
+            rebaseline = false
+            if st.level == .alert, lastLevel != .alert {
+                notify(title: "🔴 Триває тривога — \(city.displayName)", body: city.raion, silent: true)
+            }
+            lastLevel = st.level; lastHigh = st.highThreat
+            reloadWidgets(force: true)
+            return
+        }
         defer { lastLevel = st.level; lastHigh = st.highThreat }
         guard let prev = lastLevel else { return }
 
@@ -114,8 +146,8 @@ final class AppModel: ObservableObject {
             reloadWidgets(force: true)
         } else if st.highThreat && !lastHigh {
             let dist = st.nearestKm.map { " · \(Int($0)) км" } ?? ""
-            notify(title: "Висока загроза — \(city.displayName)", body: "\(st.nearestKind?.title ?? "Ціль") рухається в бік міста\(dist)")
-            if prefs.sirenOnHighThreat && !sirenPlaying { playSiren() }
+            // Only a quiet banner: the siren sounds only when the raion is painted on the map.
+            notify(title: "Ціль рухається в бік міста — \(city.displayName)", body: "\(st.nearestKind?.title ?? "Ціль")\(dist)", silent: true)
         }
         reloadWidgets(force: false)
     }
@@ -128,6 +160,7 @@ final class AppModel: ObservableObject {
     }
 
     func playSiren() {
+        guard !asleep else { return }
         siren.play(.siren, seconds: prefs.sirenSeconds, volume: prefs.volume)
         sirenPlaying = true
         DispatchQueue.main.asyncAfter(deadline: .now() + prefs.sirenSeconds + 0.2) { [weak self] in
@@ -158,7 +191,7 @@ final class AppModel: ObservableObject {
         let c = UNMutableNotificationContent()
         c.title = title
         c.body = body
-        if !silent && !sirenPlaying { c.sound = .default }
+        if !silent && !sirenPlaying && !asleep { c.sound = .default }
         c.interruptionLevel = .timeSensitive
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: c, trigger: nil))
     }

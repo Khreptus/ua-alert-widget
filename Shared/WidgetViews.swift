@@ -113,7 +113,7 @@ struct LegendView: View {
             HStack(spacing: 4) { StripedSwatch(); Text("Доразвідка").font(.system(size: 11)).foregroundStyle(Theme.secondary) }
             if showTargets {
                 HStack(spacing: 4) {
-                    TargetGlyph.path(.drone, size: 8).offsetBy(dx: 4, dy: 4).fill(Color.white).frame(width: 8, height: 8)
+                    TargetGlyph.path(.drone, size: 8).offsetBy(dx: 4, dy: 4).fill(Theme.text).frame(width: 8, height: 8)
                     Text("Ціль").font(.system(size: 11)).foregroundStyle(Theme.secondary)
                 }
             }

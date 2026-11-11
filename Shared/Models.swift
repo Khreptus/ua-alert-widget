@@ -128,11 +128,8 @@ public struct CityStatus: Sendable {
 public extension Snapshot {
     func status(for city: Hromada, geo: GeoStore = .shared) -> CityStatus {
         var st = RegionAlert(level: .none)
-        // 1. Official community-level alert (only if the hromada name is unambiguous)
-        if geo.isUniqueHromadaKey(city.key), let h = hromadas[city.key] { st = st.merged(with: h) }
-        // 2. City key (Kyiv, regional centres)
+        // The city's state = what is painted on the map: its raion (+ the city dot for Kyiv / regional centres).
         if let c = cities[city.cityKey] { st = st.merged(with: c) }
-        // 3. Raion + oblast
         st = st.merged(with: raionState(city.raion, oblast: city.oblast))
 
         var high = false
