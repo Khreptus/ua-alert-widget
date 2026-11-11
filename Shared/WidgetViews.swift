@@ -125,10 +125,16 @@ struct CityRow: View {
         let st = m.status
         HStack(spacing: 8) {
             Circle().fill(color(st)).frame(width: 7, height: 7)
-            Text(m.city?.displayName ?? "Оберіть місто").font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.text).lineLimit(1)
-            Text(m.city?.raion.replacingOccurrences(of: " район", with: " р-н") ?? "").font(.system(size: 12)).foregroundStyle(Theme.tertiary).lineLimit(1)
+            Text(m.city?.shortName ?? "Оберіть місто").font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.text).lineLimit(1)
+                .layoutPriority(2)
+            ViewThatFits(in: .horizontal) {
+                Text(m.city?.raion.replacingOccurrences(of: " район", with: " р-н") ?? "").font(.system(size: 12)).foregroundStyle(Theme.tertiary).lineLimit(1)
+                Color.clear.frame(width: 0, height: 0)
+            }
+            .layoutPriority(0)
             Spacer(minLength: 4)
             Text(rightText(st)).font(.system(size: 13, weight: .semibold)).foregroundStyle(color(st)).monospacedDigit().lineLimit(1)
+                .fixedSize()
         }
     }
     func color(_ s: CityStatus?) -> Color {
@@ -168,7 +174,7 @@ struct SmallView: View {
                 } else {
                     HStack(spacing: 5) {
                         Circle().fill(color).frame(width: 7, height: 7)
-                        Text(m.city?.displayName ?? "—").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.secondary).lineLimit(1)
+                        Text(m.city?.shortName ?? "—").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.secondary).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 2)
@@ -207,7 +213,7 @@ struct MediumView: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 6) {
                     if m.isAlarm { SirenIcon(size: 15).foregroundStyle(.white) } else { Circle().fill(color).frame(width: 7, height: 7) }
-                    Text(m.isAlarm ? "Сирена" : (m.city?.displayName ?? "Тривоги")).font(.system(size: 13, weight: .semibold)).foregroundStyle(m.isAlarm ? .white : Theme.text).lineLimit(1)
+                    Text(m.isAlarm ? "Сирена" : (m.city?.shortName ?? "Тривоги")).font(.system(size: 13, weight: .semibold)).foregroundStyle(m.isAlarm ? .white : Theme.text).lineLimit(1)
                     Spacer(minLength: 2)
                     if let more { more }
                 }
@@ -308,7 +314,7 @@ public struct StripView: View {
             } else {
                 Circle().fill(color).frame(width: 8, height: 8)
             }
-            Text(m.city?.displayName ?? "Оберіть місто")
+            Text(m.city?.shortName ?? "Оберіть місто")
                 .font(.system(size: 13, weight: .semibold)).foregroundStyle(alarm ? .white : Theme.text).lineLimit(1)
             Text(alarm ? (Fmt.duration(since: st?.since, now: m.now).map { "Тривога · \($0)" } ?? "Тривога") : title)
                 .font(.system(size: 13, weight: .semibold)).foregroundStyle(alarm ? .white : color).lineLimit(1).monospacedDigit()

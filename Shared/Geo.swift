@@ -20,6 +20,12 @@ public struct Hromada: Codable, Hashable, Identifiable, Sendable {
         return n
     }
 
+    /// Compact name for tight UI: "Хмельницька міська громада" → "Хмельницька гр."
+    public var shortName: String {
+        let d = displayName
+        return d.hasSuffix(" громада") ? String(d.dropLast(" громада".count)) + " гр." : d
+    }
+
     /// Normalised key used to match ukrainealarm community names.
     public var key: String { Hromada.normalise(name) }
 

@@ -42,6 +42,9 @@ final class DesktopUIState: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: w)
     }
 
+    /// Transparent margin around the widget so the shadow is never clipped.
+    static let shadowPad: CGFloat = 26
+
     static func contentSize(compact: Bool, expanded: Bool, size: WidgetSize) -> CGSize {
         guard compact else { return size.size }
         let strip = StripView.size
@@ -70,7 +73,8 @@ final class DesktopWidgetController {
         guard prefs.showDesktopWidget else { panel?.orderOut(nil); return }
         let p = panel ?? makePanel()
         let cs = DesktopUIState.contentSize(compact: prefs.compactMode, expanded: ui.expanded, size: prefs.widgetSize)
-        let target = NSSize(width: cs.width * prefs.widgetScale, height: cs.height * prefs.widgetScale)
+        let pad = DesktopUIState.shadowPad * 2
+        let target = NSSize(width: cs.width * prefs.widgetScale + pad, height: cs.height * prefs.widgetScale + pad)
         if p.frame.size != target {
             var f = p.frame
             f.origin.y += f.size.height - target.height  // keep top-left corner in place
@@ -117,6 +121,7 @@ struct DesktopWidgetRoot: View {
             if prefs.compactMode {
                 VStack(alignment: .leading, spacing: 8) {
                     StripView(model: model.widgetModel, more: moreButton, pinned: ui.pinned, sirenPlaying: model.sirenPlaying, onMute: { model.stopSiren() })
+                        .shadow(color: shadowColor, radius: 10, y: 4)
                         .onTapGesture { ui.togglePin() }
                         .help(ui.pinned ? "Клік — згорнути" : "Клік — закріпити відкритим")
                     if ui.expanded { card(size).transition(.opacity) }
@@ -128,6 +133,7 @@ struct DesktopWidgetRoot: View {
         .frame(width: cs.width, height: cs.height, alignment: .topLeading)
         .scaleEffect(prefs.widgetScale, anchor: .topLeading)
         .frame(width: cs.width * prefs.widgetScale, height: cs.height * prefs.widgetScale, alignment: .topLeading)
+        .padding(DesktopUIState.shadowPad)
         .gesture(WindowDragGesture.make())
         .contextMenu {
             Button("Налаштування…") { AppDelegate.shared?.showSettings() }
@@ -159,7 +165,10 @@ struct DesktopWidgetRoot: View {
             .background(AlertWidgetBackground(alarm: alarm))
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.white.opacity(alarm ? 0.18 : 0.08), lineWidth: 1))
+            .shadow(color: alarm ? Theme.red.opacity(0.4) : .black.opacity(0.35), radius: 14, y: 6)
     }
+
+    private var shadowColor: Color { model.widgetModel.isAlarm ? Theme.red.opacity(0.4) : .black.opacity(0.35) }
 }
 
 /// Hosting view: lets the borderless window be dragged and reports hover (works even when the app is inactive).
