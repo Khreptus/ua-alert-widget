@@ -169,7 +169,7 @@ enum DimapClient {
         return out
     }
 
-    /// Places with "доразвідка" mentioned in the dimap news feed during the last 30 minutes.
+    /// Places with "дорозвідка" mentioned in the dimap news feed during the last 30 minutes.
     static func recon() async throws -> ReconPlaces {
         guard let list = try await Net.json(api + "/news", site: site) as? [JSON] else { throw NetError.badJSON }
         var out = ReconPlaces()
@@ -177,7 +177,7 @@ enum DimapClient {
         let items = list.compactMap { n -> (Date, JSON)? in n.date("date").map { ($0, n) } }.sorted { $0.0 < $1.0 }
         for (date, n) in items where now.timeIntervalSince(date) < 30 * 60 {
             let text = (n.str("textPlain", "text") ?? "").lowercased()
-            let isRecon = text.contains("дорозвід") || text.contains("доразвед") || text.contains("дорозвiд")
+            let isRecon = text.contains("дорозвід") || text.contains("доразвід") || text.contains("доразвед") || text.contains("дорозвiд")
             let isEnd = text.contains("заверш") || text.contains("закінч") || text.contains("відбій дорозвід")
             guard isRecon else { continue }
             let places = ((n["classification"] as? JSON)?["places"] as? JSON) ?? [:]
@@ -284,7 +284,7 @@ public final class Aggregator: @unchecked Sendable {
             for (k, v) in r.raions where officialDown || v.level == .threat || s.raions[k] == nil { s.raions[k] = v.merged(with: s.raions[k]) }
             for (k, v) in r.cities where officialDown || s.cities[k] == nil { s.cities[k] = v.merged(with: s.cities[k]) }
         }
-        // Доразвідка from the news feed: only where there is no active alert/threat
+        // Дорозвідка from the news feed: only where there is no active alert/threat
         if let rc = dmNR.0 { Aggregator.applyRecon(rc, to: &s) }
         // Targets: ONLY dimap + ukrainealarm
         s.targets = Aggregator.mergeTargets(dmTR.0 ?? [], uaR.0?.targets ?? [])

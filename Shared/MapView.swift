@@ -151,7 +151,7 @@ public enum TargetGlyph {
 }
 
 
-/// Diagonal amber stripes for "доразвідка".
+/// Diagonal amber stripes for "дорозвідка".
 public enum Stripes {
     public static func draw(in ctx: GraphicsContext, path p: Path, scale s: CGFloat) {
         var c = ctx

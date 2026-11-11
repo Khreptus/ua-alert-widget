@@ -80,7 +80,7 @@ final class AppModel: ObservableObject {
         evaluate()
     }
 
-    // MARK: Доразвідка by time: a raion stays "recon" for 15 min after its red alert ends
+    // MARK: Дорозвідка by time: a raion stays "recon" for 15 min after its red alert ends
     private var prevRaionLevels: [String: AlertLevel] = [:]
     private var alertEnded: [String: Date] = [:]
 
@@ -135,7 +135,7 @@ final class AppModel: ObservableObject {
             reloadWidgets(force: true)
         } else if st.level == .recon && prev > .recon {
             stopSiren()
-            if prefs.notifyRecon { notify(title: "Доразвідка — \(city.displayName)", body: "Тривогу знято, триває доразвідка. Не поспішайте виходити з укриття.", silent: true) }
+            if prefs.notifyRecon { notify(title: "Дорозвідка — \(city.displayName)", body: "Тривогу знято, триває дорозвідка. Не поспішайте виходити з укриття.", silent: true) }
             reloadWidgets(force: true)
         } else if st.level == .none && prev != .none {
             stopSiren()

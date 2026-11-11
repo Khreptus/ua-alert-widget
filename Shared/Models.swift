@@ -1,7 +1,7 @@
 import Foundation
 
 public enum AlertLevel: Int, Codable, Comparable, Sendable {
-    /// none < recon (доразвідка) < threat (дрони/ракети, жовта) < alert (масштабна, червона)
+    /// none < recon (дорозвідка) < threat (дрони/ракети, жовта) < alert (масштабна, червона)
     case none = 0, recon = 1, threat = 2, alert = 3
     public static func < (a: AlertLevel, b: AlertLevel) -> Bool { a.rawValue < b.rawValue }
 }

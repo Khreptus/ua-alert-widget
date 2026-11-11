@@ -73,7 +73,7 @@ struct StateText {
         switch s.level {
         case .alert: return ("Тривога", Theme.red)
         case .threat: return ("Загроза", Theme.amber)
-        case .recon: return ("Доразвідка", Theme.amber)
+        case .recon: return ("Дорозвідка", Theme.amber)
         case .none: return s.highThreat ? ("Висока загроза", Theme.amber) : ("Спокійно", Theme.green)
         }
     }
@@ -110,7 +110,7 @@ struct LegendView: View {
         HStack(spacing: 10) {
             item(Theme.red, "Тривога")
             item(Theme.amber, "Загроза")
-            HStack(spacing: 4) { StripedSwatch(); Text("Доразвідка").font(.system(size: 11)).foregroundStyle(Theme.secondary) }
+            HStack(spacing: 4) { StripedSwatch(); Text("Дорозвідка").font(.system(size: 11)).foregroundStyle(Theme.secondary) }
             if showTargets {
                 HStack(spacing: 4) {
                     TargetGlyph.path(.drone, size: 8).offsetBy(dx: 4, dy: 4).fill(Theme.text).frame(width: 8, height: 8)
@@ -151,7 +151,7 @@ struct CityRow: View {
         switch s.level {
         case .alert: return "Тривога" + (Fmt.duration(since: s.since, now: m.now).map { " · \($0)" } ?? "")
         case .threat: return "Загроза · дрони/ракети"
-        case .recon: return "Доразвідка"
+        case .recon: return "Дорозвідка"
         case .none: return s.highThreat ? "Висока загроза" : "Тривоги немає"
         }
     }

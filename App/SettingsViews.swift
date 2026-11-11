@@ -80,7 +80,7 @@ struct WidgetSettingsPopover: View {
                 toggleRow("Повітряні цілі", "dimap.live + ukrainealarm", $prefs.showTargets)
                 toggleRow("Сирена — тривога", "Масштабна (червона)", $prefs.sirenOnAlert)
                 toggleRow("Сирена — загроза", "Дрони / ракети (жовта)", $prefs.sirenOnThreat)
-                toggleRow("Загроза і доразвідка", "Жовтим і смугами на карті", $prefs.showThreat)
+                toggleRow("Загроза і дорозвідка", "Жовтим і смугами на карті", $prefs.showThreat)
                 row("Карта") {
                     Picker("", selection: $prefs.mapMode) { ForEach(MapMode.allCases) { Text($0.title).tag($0) } }
                         .pickerStyle(.segmented).labelsHidden().frame(width: 150)
@@ -166,7 +166,7 @@ struct SettingsView: View {
                     Toggle("🔴 Сирена при масштабній тривозі", isOn: $prefs.sirenOnAlert)
                     Toggle("🟡 Сирена при загрозі дронів / ракет", isOn: $prefs.sirenOnThreat)
                     Toggle("🟡 Банер при загрозі (без звуку)", isOn: $prefs.bannerOnThreat)
-                    Toggle("Банер про доразвідку перед відбоєм", isOn: $prefs.notifyRecon)
+                    Toggle("Банер про дорозвідку перед відбоєм", isOn: $prefs.notifyRecon)
                     Toggle("Тихий сигнал при відбої", isOn: $prefs.chimeOnClear)
                     Text("Сирена звучить лише коли ваш район зафарбовується на карті, і ніколи — коли Mac у режимі сну.").font(.caption).foregroundStyle(.secondary)
                     HStack { Text("Гучність"); Slider(value: $prefs.volume, in: 0...1) }
