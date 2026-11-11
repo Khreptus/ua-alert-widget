@@ -35,6 +35,14 @@ jobs:
         if: failure()
         run: grep -E "error:" -A3 build.log | head -200 || true
 
+      - name: Inspect bundle
+        run: |
+          APP="build/Release/UA Alert.app"
+          find "$APP/Contents" -maxdepth 3 -name "*.appex" -print
+          plutil -p "$APP/Contents/PlugIns/UAAlertWidget.appex/Contents/Info.plist" | grep -E "NSExtension|CFBundleIdentifier|CFBundleExecutable|LSMinimum" || true
+          codesign -dvv --entitlements - "$APP/Contents/PlugIns/UAAlertWidget.appex" 2>&1 | grep -vE "^\s*$" | head -30 || true
+          codesign -dvv "$APP" 2>&1 | head -12 || true
+
       - name: Package DMG
         run: |
           APP="build/Release/UA Alert.app"
