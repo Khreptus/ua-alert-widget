@@ -1,5 +1,10 @@
 # Тривога UA — віджет карти тривог для macOS
 
+[![Завантажити](https://img.shields.io/badge/⬇_Завантажити-macOS-F2F2F7?style=for-the-badge&labelColor=0B0B0D)](https://github.com/Khreptus/ua-alert-widget/releases/latest/download/UA-Alert.dmg)
+![Завантажень](https://img.shields.io/github/downloads/Khreptus/ua-alert-widget/total?style=for-the-badge&label=завантажень&color=FF453A&labelColor=0B0B0D)
+
+![Тривога UA](docs/og.png)
+
 Карта повітряних тривог України по районах, повітряні цілі та сирена для вашого міста.
 
 - **Віджет на робочому столі** — оновлюється кожні ~6 с, кнопка «⋯» відкриває налаштування.

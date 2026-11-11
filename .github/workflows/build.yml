@@ -3,6 +3,7 @@ name: Build DMG
 on:
   push:
     branches: [main]
+    paths-ignore: ["docs/**", "README.md"]
   workflow_dispatch:
 
 permissions:
@@ -66,6 +67,6 @@ jobs:
         run: |
           SHA=$(cut -d' ' -f1 UA-Alert.dmg.sha256)
           gh release create "build-${{ github.run_number }}" UA-Alert.dmg UA-Alert.dmg.sha256 \
-            --title "UA Alert — збірка ${{ github.run_number }}" \
-            --notes "Автоматична збірка з коміту ${{ github.sha }}. SHA-256: $SHA" \
+            --title "Тривога UA для macOS · версія 1.${{ github.run_number }}" \
+            --notes "Карта повітряних тривог по районах для macOS. Завантажте UA-Alert.dmg нижче. Сторінка програми: https://khreptus.github.io/ua-alert-widget/ · SHA-256: $SHA" \
             --latest

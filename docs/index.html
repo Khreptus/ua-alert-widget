@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Тривога UA — карта повітряних тривог для macOS</title>
+<meta name="description" content="Карта тривог по районах на робочому столі Mac: сирена для вашого міста, повітряні цілі онлайн. Безкоштовно.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Тривога UA">
+<meta property="og:title" content="Тривога UA — карта тривог для macOS">
+<meta property="og:description" content="Карта тривог по районах на робочому столі Mac. Сирена для вашого міста, цілі онлайн. Безкоштовно.">
+<meta property="og:image" content="https://khreptus.github.io/ua-alert-widget/og.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:url" content="https://khreptus.github.io/ua-alert-widget/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://khreptus.github.io/ua-alert-widget/og.png">
+<link rel="icon" href="icon.png">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Inter",sans-serif;background:radial-gradient(60% 50% at 80% 10%,rgba(255,69,58,.22),transparent 60%),#0B0B0D;color:#F2F2F7;min-height:100vh;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:64px 24px 80px;display:grid;grid-template-columns:1.05fr 1fr;gap:56px;align-items:center}
+@media(max-width:860px){.wrap{grid-template-columns:1fr;padding-top:40px}}
+.icon{width:96px;height:96px;border-radius:22px;border:1px solid rgba(255,255,255,.14)}
+h1{font-size:64px;font-weight:800;letter-spacing:-.035em;margin-top:22px}
+.lead{font-size:22px;color:#A1A1A8;line-height:1.45;margin-top:14px;max-width:30ch}
+.btn{display:inline-flex;align-items:center;gap:10px;margin-top:30px;padding:16px 26px;border-radius:14px;background:#F2F2F7;color:#0B0B0D;font-size:19px;font-weight:700;text-decoration:none}
+.btn:hover{background:#fff}
+.meta{margin-top:12px;font-size:14px;color:#6E6E76}
+.meta a{color:#8E8E93}
+.steps{margin-top:34px;display:grid;gap:12px;font-size:16px;color:#C7C7CC;line-height:1.45;counter-reset:s}
+.steps div{padding-left:36px;position:relative}
+.steps div::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:0;width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.08);font-size:13px;font-weight:700;display:grid;place-items:center;color:#F2F2F7}
+.shot{width:100%;border-radius:28px;box-shadow:0 30px 80px rgba(0,0,0,.55)}
+.foot{max-width:1080px;margin:0 auto;padding:0 24px 48px;font-size:13px;color:#6E6E76;line-height:1.6}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <section>
+    <img class="icon" src="icon.png" alt="">
+    <h1>Тривога UA</h1>
+    <p class="lead">Карта повітряних тривог по районах — прямо на робочому столі Mac. Сирена лише для вашого міста, цілі онлайн.</p>
+    <a class="btn" href="https://github.com/Khreptus/ua-alert-widget/releases/latest/download/UA-Alert.dmg">⬇ Завантажити для macOS</a>
+    <p class="meta">Безкоштовно · macOS 14+ · <a href="https://github.com/Khreptus/ua-alert-widget/releases/latest">усі версії</a></p>
+    <div class="steps">
+      <div>Відкрийте <b>UA-Alert.dmg</b> і перетягніть UA Alert у «Програми».</div>
+      <div>Перший запуск: «Системні параметри → Конфіденційність і безпека» → <b>«Все одно відкрити»</b> (програма не підписана Apple).</div>
+      <div>Натисніть ⋯ на віджеті → «Мій город» і оберіть своє місто.</div>
+    </div>
+  </section>
+  <img class="shot" src="menu.png" alt="Тривога UA у рядку меню macOS">
+</main>
+<p class="foot">Дані: map.ukrainealarm.com (офіційна карта), dimap.live, radarua.com. Програма не є офіційним джерелом оповіщення — завжди орієнтуйтеся на сирени та офіційні канали.</p>
+</body>
+</html>
