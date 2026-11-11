@@ -78,8 +78,9 @@ struct WidgetSettingsPopover: View {
                     }
                 }.buttonStyle(.plain)
                 toggleRow("Повітряні цілі", "dimap.live + ukrainealarm", $prefs.showTargets)
-                toggleRow("Сирена", "Тривога та висока загроза", $prefs.sirenOnAlert)
-                toggleRow("Зони загрози", "Жовтим на карті", $prefs.showThreat)
+                toggleRow("Сирена — тривога", "Масштабна (червона)", $prefs.sirenOnAlert)
+                toggleRow("Сирена — загроза", "Дрони / ракети (жовта)", $prefs.sirenOnThreat)
+                toggleRow("Загроза і доразвідка", "Жовтим і смугами на карті", $prefs.showThreat)
                 row("Карта") {
                     Picker("", selection: $prefs.mapMode) { ForEach(MapMode.allCases) { Text($0.title).tag($0) } }
                         .pickerStyle(.segmented).labelsHidden().frame(width: 150)
@@ -162,9 +163,11 @@ struct SettingsView: View {
 
             Form {
                 Section("Сирена") {
-                    Toggle("Сирена при тривозі в моєму районі", isOn: $prefs.sirenOnAlert)
+                    Toggle("🔴 Сирена при масштабній тривозі", isOn: $prefs.sirenOnAlert)
+                    Toggle("🟡 Сирена при загрозі дронів / ракет", isOn: $prefs.sirenOnThreat)
+                    Toggle("🟡 Банер при загрозі (без звуку)", isOn: $prefs.bannerOnThreat)
                     Toggle("Сирена при високій загрозі (ціль летить у бік міста)", isOn: $prefs.sirenOnHighThreat)
-                    Toggle("Банер при загрозі в районі (без звуку)", isOn: $prefs.bannerOnThreat)
+                    Toggle("Банер про доразвідку перед відбоєм", isOn: $prefs.notifyRecon)
                     Toggle("Тихий сигнал при відбої", isOn: $prefs.chimeOnClear)
                     HStack { Text("Гучність"); Slider(value: $prefs.volume, in: 0...1) }
                     Picker("Тривалість сирени", selection: $prefs.sirenSeconds) {

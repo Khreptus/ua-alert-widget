@@ -73,6 +73,7 @@ struct StateText {
         switch s.level {
         case .alert: return ("Тривога", Theme.red)
         case .threat: return ("Загроза", Theme.amber)
+        case .recon: return ("Доразвідка", Theme.amber)
         case .none: return s.highThreat ? ("Висока загроза", Theme.amber) : ("Спокійно", Theme.green)
         }
     }
@@ -81,7 +82,11 @@ struct StateText {
         guard let s else { return "" }
         if s.level == .alert, let d = Fmt.duration(since: s.since, now: now), let since = s.since { return "з \(Fmt.time(since)) · \(d)" }
         if let km = s.nearestKm, km < 150, s.highThreat { return "\(s.nearestKind?.title ?? "Ціль") за \(Int(km)) км" }
-        return s.level == .threat ? "Загроза в районі" : "Тривоги немає"
+        switch s.level {
+        case .threat: return "Дрони / ракети"
+        case .recon: return "Перед відбоєм"
+        default: return "Тривоги немає"
+        }
     }
 }
 
@@ -105,7 +110,7 @@ struct LegendView: View {
         HStack(spacing: 10) {
             item(Theme.red, "Тривога")
             item(Theme.amber, "Загроза")
-            item(Color(hex: 0x3A3A3E), "Спокійно")
+            HStack(spacing: 4) { StripedSwatch(); Text("Доразвідка").font(.system(size: 11)).foregroundStyle(Theme.secondary) }
             if showTargets {
                 HStack(spacing: 4) {
                     TargetGlyph.path(.drone, size: 8).offsetBy(dx: 4, dy: 4).fill(Color.white).frame(width: 8, height: 8)
@@ -139,13 +144,14 @@ struct CityRow: View {
     }
     func color(_ s: CityStatus?) -> Color {
         guard let s else { return Theme.secondary }
-        switch s.level { case .alert: return Theme.red; case .threat: return Theme.amber; case .none: return s.highThreat ? Theme.amber : Theme.green }
+        switch s.level { case .alert: return Theme.red; case .threat, .recon: return Theme.amber; case .none: return s.highThreat ? Theme.amber : Theme.green }
     }
     func rightText(_ s: CityStatus?) -> String {
         guard let s else { return "" }
         switch s.level {
         case .alert: return "Тривога" + (Fmt.duration(since: s.since, now: m.now).map { " · \($0)" } ?? "")
-        case .threat: return "Загроза"
+        case .threat: return "Загроза · дрони/ракети"
+        case .recon: return "Доразвідка"
         case .none: return s.highThreat ? "Висока загроза" : "Тривоги немає"
         }
     }
@@ -272,7 +278,7 @@ struct LargeView: View {
 
     func summaryLine(_ s: Snapshot.Summary) -> String {
         var parts = ["\(s.alertRaions) \(Fmt.plural(s.alertRaions, "район", "райони", "районів"))"]
-        if m.showThreat { parts.append("\(s.threatRaions) під загрозою") }
+        if m.showThreat { parts.append("\(s.threatRaions) загроза") }
         if m.showTargets { parts.append("\(s.targets) \(Fmt.plural(s.targets, "ціль", "цілі", "цілей"))") }
         return parts.joined(separator: " · ")
     }
@@ -288,19 +294,18 @@ public struct MoreDots: View {
     }
 }
 
-// MARK: - Compact strip
+// MARK: - Compact strip (content only — the container draws the background)
 
-public struct StripView: View {
+public struct StripContent: View {
     let m: WidgetModel
-    let more: AnyView?
-    let pinned: Bool
+    let width: CGFloat
     let sirenPlaying: Bool
     let onMute: (() -> Void)?
 
-    public static let size = CGSize(width: 340, height: 36)
+    public static let height: CGFloat = 36
 
-    public init(model: WidgetModel, more: AnyView?, pinned: Bool, sirenPlaying: Bool = false, onMute: (() -> Void)? = nil) {
-        self.m = model; self.more = more; self.pinned = pinned; self.sirenPlaying = sirenPlaying; self.onMute = onMute
+    public init(model: WidgetModel, width: CGFloat, sirenPlaying: Bool = false, onMute: (() -> Void)? = nil) {
+        self.m = model; self.width = width; self.sirenPlaying = sirenPlaying; self.onMute = onMute
     }
 
     public var body: some View {
@@ -308,34 +313,34 @@ public struct StripView: View {
         let alarm = m.isAlarm
         let (title, color) = StateText.title(st)
         let sum = m.snapshot.summary()
+        let roomy = width >= 300
         HStack(spacing: 8) {
             if alarm || st?.highThreat == true {
                 SirenIcon(size: 14).foregroundStyle(alarm ? .white : Theme.amber)
+            } else if st?.level == .recon {
+                StripedSwatch().scaleEffect(1.2)
             } else {
                 Circle().fill(color).frame(width: 8, height: 8)
             }
-            Text(m.city?.shortName ?? "Оберіть місто")
-                .font(.system(size: 13, weight: .semibold)).foregroundStyle(alarm ? .white : Theme.text).lineLimit(1)
+            if roomy {
+                Text(m.city?.shortName ?? "Оберіть місто")
+                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(alarm ? .white : Theme.text).lineLimit(1)
+            }
             Text(alarm ? (Fmt.duration(since: st?.since, now: m.now).map { "Тривога · \($0)" } ?? "Тривога") : title)
                 .font(.system(size: 13, weight: .semibold)).foregroundStyle(alarm ? .white : color).lineLimit(1).monospacedDigit()
+                .fixedSize()
             Spacer(minLength: 4)
             if alarm, sirenPlaying, let onMute {
                 Button(action: onMute) { Image(systemName: "speaker.slash.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(Color(hex: 0xB3140F)).frame(width: 24, height: 22).background(Capsule().fill(.white)) }
                     .buttonStyle(.plain).help("Вимкнути звук")
-            } else {
+            } else if roomy {
                 Text("\(sum.alertRaions) р-н\(m.showTargets ? " · \(sum.targets) ц." : "")")
                     .font(.system(size: 11, weight: .medium)).foregroundStyle(alarm ? .white.opacity(0.75) : Theme.tertiary).monospacedDigit().lineLimit(1)
             }
-            if pinned { Image(systemName: "pin.fill").font(.system(size: 10, weight: .semibold)).foregroundStyle(alarm ? .white.opacity(0.8) : Theme.secondary).rotationEffect(.degrees(45)) }
-            if let more { more.scaleEffect(0.85) }
+            Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold)).foregroundStyle(alarm ? .white.opacity(0.7) : Theme.tertiary)
         }
-        .padding(.leading, 12).padding(.trailing, 6)
-        .frame(width: StripView.size.width, height: StripView.size.height)
-        .background(
-            Capsule().fill(LinearGradient(colors: alarm ? [Theme.alarmTop, Theme.alarmBottom] : [Color(hex: 0x262629), Theme.bgBottom], startPoint: .top, endPoint: .bottom))
-        )
-        .overlay(Capsule().strokeBorder(.white.opacity(alarm ? 0.2 : 0.09), lineWidth: 1))
-        .contentShape(Capsule())
+        .padding(.horizontal, 14)
+        .frame(width: width, height: StripContent.height)
         .environment(\.colorScheme, .dark)
     }
 }

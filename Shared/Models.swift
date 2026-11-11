@@ -1,7 +1,8 @@
 import Foundation
 
 public enum AlertLevel: Int, Codable, Comparable, Sendable {
-    case none = 0, threat = 1, alert = 2
+    /// none < recon (доразвідка) < threat (дрони/ракети, жовта) < alert (масштабна, червона)
+    case none = 0, recon = 1, threat = 2, alert = 3
     public static func < (a: AlertLevel, b: AlertLevel) -> Bool { a.rawValue < b.rawValue }
 }
 
@@ -86,6 +87,7 @@ public struct Snapshot: Codable, Sendable {
     public struct Summary: Sendable {
         public var alertRaions = 0
         public var threatRaions = 0
+        public var reconRaions = 0
         public var alertOblasts = 0
         public var targets = 0
     }
@@ -97,6 +99,7 @@ public struct Snapshot: Codable, Sendable {
             let st = raionState(r.name, oblast: r.oblast)
             if st.level == .alert { s.alertRaions += 1; obl.insert(r.oblast) }
             else if st.level == .threat { s.threatRaions += 1 }
+            else if st.level == .recon { s.reconRaions += 1 }
         }
         s.alertOblasts = obl.count
         s.targets = targets.count

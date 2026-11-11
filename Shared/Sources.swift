@@ -86,7 +86,20 @@ enum UkraineAlarmClient {
             let active = (a["activeAlerts"] as? [JSON]) ?? []
             guard !active.isEmpty else { continue }
             let since = active.compactMap { $0.date("lastUpdate") }.min() ?? a.date("lastUpdate")
-            let st = RegionAlert(level: .alert, since: since)
+            // Each active alert carries levels: "red" = масштабна тривога, "yellow" = загроза дронів/ракет
+            var level: AlertLevel = .none
+            for al in active {
+                let lv = (al["activeAlertLevels"] as? [JSON]) ?? []
+                if lv.isEmpty { level = .alert }
+                for l in lv {
+                    switch (l.str("alertLevel") ?? "red").lowercased() {
+                    case "yellow", "orange": level = max(level, .threat)
+                    default: level = .alert
+                    }
+                }
+            }
+            guard level != .none else { continue }
+            let st = RegionAlert(level: level, since: since)
             switch a.str("regionType") ?? "" {
             case "State":
                 if name.hasPrefix("м.") { out.cities[name] = st.merged(with: out.cities[name]) }
@@ -156,6 +169,29 @@ enum DimapClient {
         return out
     }
 
+    /// Places with "доразвідка" mentioned in the dimap news feed during the last 30 minutes.
+    static func recon() async throws -> ReconPlaces {
+        guard let list = try await Net.json(api + "/news", site: site) as? [JSON] else { throw NetError.badJSON }
+        var out = ReconPlaces()
+        let now = Date()
+        let items = list.compactMap { n -> (Date, JSON)? in n.date("date").map { ($0, n) } }.sorted { $0.0 < $1.0 }
+        for (date, n) in items where now.timeIntervalSince(date) < 30 * 60 {
+            let text = (n.str("textPlain", "text") ?? "").lowercased()
+            let isRecon = text.contains("дорозвід") || text.contains("доразвед") || text.contains("дорозвiд")
+            let isEnd = text.contains("заверш") || text.contains("закінч") || text.contains("відбій дорозвід")
+            guard isRecon else { continue }
+            let places = ((n["classification"] as? JSON)?["places"] as? JSON) ?? [:]
+            func names(_ k: String) -> [String] { ((places[k] as? [JSON]) ?? []).compactMap { $0.str("name") } }
+            var obl = names("oblasts"), dist = names("districts"), cities = names("cities")
+            if obl.isEmpty && dist.isEmpty && cities.isEmpty { obl = (n["regions"] as? [String]) ?? [] }
+            if text.contains("київ") && !text.contains("київщин") && !text.contains("київськ") { cities.append("м. Київ") }
+            for o in obl { if isEnd { out.oblasts.remove(o) } else { out.oblasts.insert(o) } }
+            for d in dist { let k = d.hasSuffix("район") ? d : d + " район"; if isEnd { out.raions.remove(k) } else { out.raions.insert(k) } }
+            for c in cities { let k = c.hasPrefix("м. ") ? c : "м. " + c; if isEnd { out.cities.remove(k) } else { out.cities.insert(k) } }
+        }
+        return out
+    }
+
     static func targets() async throws -> [AirTarget] {
         let ts = Int(Date().timeIntervalSince1970 * 1000)
         let root = try await Net.json(api + "/targets?_refresh=\(ts)", site: site)
@@ -172,6 +208,12 @@ enum DimapClient {
                 sources: ["dimap"])
         }
     }
+}
+
+public struct ReconPlaces: Sendable {
+    public var raions = Set<String>()
+    public var cities = Set<String>()
+    public var oblasts = Set<String>()
 }
 
 // MARK: - radarua.com (alerts only — used as a fallback)
@@ -223,7 +265,8 @@ public final class Aggregator: @unchecked Sendable {
         async let dmA = run("dimap.live") { try await DimapClient.alerts() }
         async let dmT = run("dimap.live цілі") { try await DimapClient.targets() }
         async let rr = run("radarua.com") { try await RadarUAClient.alerts() }
-        let (uaR, dmAR, dmTR, rrR) = await (ua, dmA, dmT, rr)
+        async let dmN = run("dimap.live стрічка") { try await DimapClient.recon() }
+        let (uaR, dmAR, dmTR, rrR, dmNR) = await (ua, dmA, dmT, rr, dmN)
 
         var s = Snapshot()
         // Official first
@@ -241,12 +284,25 @@ public final class Aggregator: @unchecked Sendable {
             for (k, v) in r.raions where officialDown || v.level == .threat || s.raions[k] == nil { s.raions[k] = v.merged(with: s.raions[k]) }
             for (k, v) in r.cities where officialDown || s.cities[k] == nil { s.cities[k] = v.merged(with: s.cities[k]) }
         }
+        // Доразвідка from the news feed: only where there is no active alert/threat
+        if let rc = dmNR.0 { Aggregator.applyRecon(rc, to: &s) }
         // Targets: ONLY dimap + ukrainealarm
         s.targets = Aggregator.mergeTargets(dmTR.0 ?? [], uaR.0?.targets ?? [])
 
         s.sources = [uaR.1, SourceStatus(name: "dimap.live", ok: dmAR.1.ok || dmTR.1.ok, detail: dmAR.1.ok ? (dmTR.1.ok ? "OK" : "без цілей") : dmAR.1.detail), rrR.1]
         s.updated = Date()
         return s
+    }
+
+    public static func applyRecon(_ rc: ReconPlaces, to s: inout Snapshot, geo: GeoStore = .shared) {
+        let recon = RegionAlert(level: .recon, since: Date())
+        var raions = rc.raions
+        for r in geo.raions where rc.oblasts.contains(r.oblast) { raions.insert(r.name) }
+        for name in raions {
+            let oblast = geo.raions.first { $0.name == name }?.oblast ?? ""
+            if s.raionState(name, oblast: oblast).level < .recon { s.raions[name] = recon }
+        }
+        for c in rc.cities where (s.cities[c]?.level ?? .none) < .recon { s.cities[c] = recon }
     }
 
     static func mergeTargets(_ a: [AirTarget], _ b: [AirTarget]) -> [AirTarget] {

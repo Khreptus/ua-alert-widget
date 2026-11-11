@@ -26,6 +26,7 @@ public enum Theme {
         switch l {
         case .alert: return red
         case .threat: return showThreat ? amber : idle
+        case .recon: return showThreat ? amber.opacity(0.3) : idle
         case .none: return idle
         }
     }
@@ -67,6 +68,7 @@ public struct UAMapView: View {
                 let level = mode == .raions ? snapshot.raionState(r.name, oblast: r.oblast).level : (oblastLevel[r.oblast] ?? .none)
                 let p = r.path.applying(tf)
                 ctx.fill(p, with: .color(Theme.color(level, showThreat: showThreat)))
+                if level == .recon && showThreat { Stripes.draw(in: ctx, path: p, scale: s) }
                 if mode == .raions { ctx.stroke(p, with: .color(Theme.raionBorder), lineWidth: max(0.35, 0.8 * s)) }
             }
             ctx.stroke(geo.oblastBorders.applying(tf), with: .color(Theme.oblastBorder), style: StrokeStyle(lineWidth: max(0.7, 1.6 * s), lineJoin: .round))
@@ -75,7 +77,7 @@ public struct UAMapView: View {
             let kyiv = geo.project(lat: 50.45, lon: 30.52).applying(tf)
             let kyivLevel = snapshot.cities["м. Київ"]?.level ?? .none
             let kr = max(2.5, 5 * s)
-            ctx.fill(Path(ellipseIn: CGRect(x: kyiv.x - kr, y: kyiv.y - kr, width: kr * 2, height: kr * 2)), with: .color(Theme.color(kyivLevel, showThreat: showThreat)))
+            ctx.fill(Path(ellipseIn: CGRect(x: kyiv.x - kr, y: kyiv.y - kr, width: kr * 2, height: kr * 2)), with: .color(kyivLevel == .recon ? Theme.amber : Theme.color(kyivLevel, showThreat: showThreat)))
             ctx.stroke(Path(ellipseIn: CGRect(x: kyiv.x - kr, y: kyiv.y - kr, width: kr * 2, height: kr * 2)), with: .color(Theme.oblastBorder), lineWidth: 1)
 
             // Air targets
@@ -136,5 +138,37 @@ public enum TargetGlyph {
         case .ballistic: return Color(hex: 0xFF6B6B)
         case .aircraft: return Color(hex: 0x64D2FF)
         }
+    }
+}
+
+
+/// Diagonal amber stripes for "доразвідка".
+public enum Stripes {
+    public static func draw(in ctx: GraphicsContext, path p: Path, scale s: CGFloat) {
+        var c = ctx
+        c.clip(to: p)
+        let b = p.boundingRect
+        let step = max(3, 7 * s)
+        var stripes = Path()
+        var x = b.minX - b.height
+        while x < b.maxX {
+            stripes.move(to: CGPoint(x: x, y: b.maxY))
+            stripes.addLine(to: CGPoint(x: x + b.height, y: b.minY))
+            x += step
+        }
+        c.stroke(stripes, with: .color(Theme.amber), lineWidth: max(1, 2.4 * s))
+    }
+}
+
+/// Small legend swatch with stripes.
+public struct StripedSwatch: View {
+    public init() {}
+    public var body: some View {
+        Canvas { ctx, size in
+            let p = Path(ellipseIn: CGRect(origin: .zero, size: size))
+            ctx.fill(p, with: .color(Theme.amber.opacity(0.3)))
+            Stripes.draw(in: ctx, path: p, scale: 0.35)
+        }
+        .frame(width: 8, height: 8)
     }
 }

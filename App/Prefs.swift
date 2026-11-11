@@ -14,6 +14,8 @@ final class Prefs: ObservableObject {
     @Published var sirenOnAlert: Bool { didSet { d.set(sirenOnAlert, forKey: "sirenOnAlert") } }
     @Published var sirenOnHighThreat: Bool { didSet { d.set(sirenOnHighThreat, forKey: "sirenOnHighThreat") } }
     @Published var bannerOnThreat: Bool { didSet { d.set(bannerOnThreat, forKey: "bannerOnThreat") } }
+    @Published var sirenOnThreat: Bool { didSet { d.set(sirenOnThreat, forKey: "sirenOnThreat") } }
+    @Published var notifyRecon: Bool { didSet { d.set(notifyRecon, forKey: "notifyRecon") } }
     @Published var chimeOnClear: Bool { didSet { d.set(chimeOnClear, forKey: "chimeOnClear") } }
     @Published var volume: Double { didSet { d.set(volume, forKey: "volume") } }
     @Published var sirenSeconds: Double { didSet { d.set(sirenSeconds, forKey: "sirenSeconds") } }
@@ -27,7 +29,7 @@ final class Prefs: ObservableObject {
         d.register(defaults: [
             "cityID": GeoStore.shared.defaultCity?.id ?? "",
             "showTargets": true, "showThreat": true, "mapMode": MapMode.raions.rawValue,
-            "sirenOnAlert": true, "sirenOnHighThreat": true, "bannerOnThreat": false, "chimeOnClear": true,
+            "sirenOnAlert": true, "sirenOnHighThreat": true, "bannerOnThreat": true, "sirenOnThreat": false, "notifyRecon": true, "chimeOnClear": true,
             "volume": 0.8, "sirenSeconds": 30.0,
             "showDesktopWidget": true, "widgetSize": WidgetSize.large.rawValue, "widgetScale": 1.0, "widgetOnTop": false, "compactMode": true,
         ])
@@ -38,6 +40,8 @@ final class Prefs: ObservableObject {
         sirenOnAlert = d.bool(forKey: "sirenOnAlert")
         sirenOnHighThreat = d.bool(forKey: "sirenOnHighThreat")
         bannerOnThreat = d.bool(forKey: "bannerOnThreat")
+        sirenOnThreat = d.bool(forKey: "sirenOnThreat")
+        notifyRecon = d.bool(forKey: "notifyRecon")
         chimeOnClear = d.bool(forKey: "chimeOnClear")
         volume = d.double(forKey: "volume")
         sirenSeconds = d.double(forKey: "sirenSeconds")

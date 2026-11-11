@@ -45,7 +45,8 @@ final class AppModel: ObservableObject {
         guard !refreshing else { return }
         refreshing = true
         defer { refreshing = false }
-        let snap = await aggregator.fetch()
+        var snap = await aggregator.fetch()
+        applyTimedRecon(&snap)
         // keep previous data if every source failed
         if snap.sources.allSatisfy({ !$0.ok }), !snapshot.isEmpty {
             var s = snapshot; s.sources = snap.sources
@@ -55,6 +56,27 @@ final class AppModel: ObservableObject {
         }
         now = Date()
         evaluate()
+    }
+
+    // MARK: Доразвідка by time: a raion stays "recon" for 15 min after its red alert ends
+    private var prevRaionLevels: [String: AlertLevel] = [:]
+    private var alertEnded: [String: Date] = [:]
+
+    private func applyTimedRecon(_ s: inout Snapshot) {
+        guard !s.sources.allSatisfy({ !$0.ok }) else { return }
+        let now = Date()
+        var cur: [String: AlertLevel] = [:]
+        for r in GeoStore.shared.raions {
+            let l = s.raionState(r.name, oblast: r.oblast).level
+            cur[r.name] = l
+            if prevRaionLevels[r.name] == .alert && l < .alert { alertEnded[r.name] = now }
+            if l == .alert { alertEnded[r.name] = nil }
+            if l == .none, let t = alertEnded[r.name], now.timeIntervalSince(t) < 15 * 60 {
+                s.raions[r.name] = RegionAlert(level: .recon, since: t)
+            }
+        }
+        alertEnded = alertEnded.filter { now.timeIntervalSince($0.value) < 15 * 60 }
+        prevRaionLevels = cur
     }
 
     /// Compare city status with the previous one → siren / notifications.
@@ -70,20 +92,30 @@ final class AppModel: ObservableObject {
         guard let prev = lastLevel else { return }
 
         if st.level == .alert && prev != .alert {
-            notify(title: "Повітряна тривога — \(city.displayName)", body: "\(city.raion) · \(Fmt.time(Date())). Пройдіть в укриття.")
+            notify(title: "🔴 Повітряна тривога — \(city.displayName)", body: "\(city.raion) · \(Fmt.time(Date())). Пройдіть в укриття.")
             if prefs.sirenOnAlert { playSiren() }
             reloadWidgets(force: true)
-        } else if st.level != .alert && prev == .alert {
-            notify(title: "Відбій тривоги — \(city.displayName)", body: city.raion)
+        } else if st.level == .threat && prev < .threat {
+            if prefs.sirenOnThreat { playSiren() }
+            if prefs.bannerOnThreat || prefs.sirenOnThreat {
+                notify(title: "🟡 Загроза дронів / ракет — \(city.displayName)", body: city.raion, silent: !prefs.sirenOnThreat)
+            }
+            reloadWidgets(force: true)
+        } else if st.level == .recon && prev > .recon {
             stopSiren()
-            if prefs.chimeOnClear { siren.play(.chime, seconds: 1, volume: prefs.volume * 0.7) }
+            if prefs.notifyRecon { notify(title: "Доразвідка — \(city.displayName)", body: "Тривогу знято, триває доразвідка. Не поспішайте виходити з укриття.", silent: true) }
+            reloadWidgets(force: true)
+        } else if st.level == .none && prev != .none {
+            stopSiren()
+            if prev >= .threat || prev == .recon {
+                notify(title: "Відбій — \(city.displayName)", body: city.raion, silent: true)
+                if prefs.chimeOnClear { siren.play(.chime, seconds: 1, volume: prefs.volume * 0.7) }
+            }
             reloadWidgets(force: true)
         } else if st.highThreat && !lastHigh {
             let dist = st.nearestKm.map { " · \(Int($0)) км" } ?? ""
             notify(title: "Висока загроза — \(city.displayName)", body: "\(st.nearestKind?.title ?? "Ціль") рухається в бік міста\(dist)")
             if prefs.sirenOnHighThreat && !sirenPlaying { playSiren() }
-        } else if st.level == .threat && prev == .none && prefs.bannerOnThreat {
-            notify(title: "Загроза — \(city.displayName)", body: "Район: \(city.raion)", silent: true)
         }
         reloadWidgets(force: false)
     }

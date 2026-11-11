@@ -11,32 +11,38 @@ final class DesktopPanel: NSPanel {
 @MainActor
 final class DesktopUIState: ObservableObject {
     static let shared = DesktopUIState()
+    /// Visual state (animated in SwiftUI).
     @Published var expanded = false
+    /// Window size state: grows before the expand animation, shrinks after the collapse animation.
+    @Published var panelExpanded = false
     @Published var pinned = false
     @Published var settingsOpen = false { didSet { if !settingsOpen { scheduleCollapse() } } }
     private var hovering = false
     private var collapseWork: DispatchWorkItem?
+    static let animation = Animation.spring(response: 0.38, dampingFraction: 0.86)
 
     func hover(_ inside: Bool) {
         hovering = inside
-        if inside {
-            collapseWork?.cancel()
-            if !expanded { expanded = true }
-        } else {
-            scheduleCollapse()
-        }
+        if inside { collapseWork?.cancel(); expand() } else { scheduleCollapse() }
     }
 
     func togglePin() {
         pinned.toggle()
-        if pinned { expanded = true } else { scheduleCollapse(delay: 0.1) }
+        if pinned { expand() } else { scheduleCollapse(delay: 0.1) }
+    }
+
+    private func expand() {
+        guard !expanded else { return }
+        panelExpanded = true
+        DispatchQueue.main.async { withAnimation(DesktopUIState.animation) { self.expanded = true } }
     }
 
     private func scheduleCollapse(delay: Double = 0.45) {
         collapseWork?.cancel()
         let w = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            if !self.hovering && !self.pinned && !self.settingsOpen { self.expanded = false }
+            guard let self, !self.hovering, !self.pinned, !self.settingsOpen, self.expanded else { return }
+            withAnimation(DesktopUIState.animation) { self.expanded = false }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) { if !self.expanded { self.panelExpanded = false } }
         }
         collapseWork = w
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: w)
@@ -46,10 +52,9 @@ final class DesktopUIState: ObservableObject {
     static let shadowPad: CGFloat = 26
 
     static func contentSize(compact: Bool, expanded: Bool, size: WidgetSize) -> CGSize {
-        guard compact else { return size.size }
-        let strip = StripView.size
-        guard expanded else { return strip }
-        return CGSize(width: max(strip.width, size.size.width), height: strip.height + 8 + size.size.height)
+        let full = size.size
+        guard compact, !expanded else { return full }
+        return CGSize(width: full.width, height: StripContent.height)
     }
 }
 
@@ -72,7 +77,7 @@ final class DesktopWidgetController {
     private func apply() {
         guard prefs.showDesktopWidget else { panel?.orderOut(nil); return }
         let p = panel ?? makePanel()
-        let cs = DesktopUIState.contentSize(compact: prefs.compactMode, expanded: ui.expanded, size: prefs.widgetSize)
+        let cs = DesktopUIState.contentSize(compact: prefs.compactMode, expanded: ui.panelExpanded, size: prefs.widgetSize)
         let pad = DesktopUIState.shadowPad * 2
         let target = NSSize(width: cs.width * prefs.widgetScale + pad, height: cs.height * prefs.widgetScale + pad)
         if p.frame.size != target {
@@ -88,7 +93,7 @@ final class DesktopWidgetController {
     }
 
     private func makePanel() -> DesktopPanel {
-        let p = DesktopPanel(contentRect: NSRect(x: 0, y: 0, width: 340, height: 36),
+        let p = DesktopPanel(contentRect: NSRect(x: 0, y: 0, width: 416, height: 88),
                              styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
                              backing: .buffered, defer: false)
         p.isOpaque = false
@@ -101,7 +106,7 @@ final class DesktopWidgetController {
             .environmentObject(AppModel.shared).environmentObject(Prefs.shared).environmentObject(DesktopUIState.shared))
         if !p.setFrameUsingName("UAAlertDesktopWidget"), let screen = NSScreen.main {
             let v = screen.visibleFrame
-            p.setFrameTopLeftPoint(NSPoint(x: v.maxX - 400, y: v.maxY - 16))
+            p.setFrameTopLeftPoint(NSPoint(x: v.maxX - 440, y: v.maxY - 8))
         }
         p.setFrameAutosaveName("UAAlertDesktopWidget")
         panel = p
@@ -116,23 +121,42 @@ struct DesktopWidgetRoot: View {
 
     var body: some View {
         let size = prefs.widgetSize
-        let cs = DesktopUIState.contentSize(compact: prefs.compactMode, expanded: ui.expanded, size: size)
-        Group {
-            if prefs.compactMode {
-                VStack(alignment: .leading, spacing: 8) {
-                    StripView(model: model.widgetModel, more: moreButton, pinned: ui.pinned, sirenPlaying: model.sirenPlaying, onMute: { model.stopSiren() })
-                        .shadow(color: shadowColor, radius: 10, y: 4)
-                        .onTapGesture { ui.togglePin() }
-                        .help(ui.pinned ? "Клік — згорнути" : "Клік — закріпити відкритим")
-                    if ui.expanded { card(size).transition(.opacity) }
-                }
-            } else {
-                card(size)
+        let full = size.size
+        let compact = prefs.compactMode
+        let expanded = !compact || ui.expanded
+        let wm = model.widgetModel
+        let alarm = wm.isAlarm && (size != .large || !expanded)
+        let panel = DesktopUIState.contentSize(compact: compact, expanded: ui.panelExpanded, size: size)
+        let radius: CGFloat = expanded ? 22 : StripContent.height / 2
+
+        ZStack(alignment: .top) {
+            AlertWidgetView(model: wm, size: size, more: expanded ? moreButton : nil,
+                            sirenPlaying: model.sirenPlaying, onMute: { model.stopSiren() })
+                .frame(width: full.width, height: full.height)
+                .opacity(expanded ? 1 : 0)
+                .allowsHitTesting(expanded)
+            if compact {
+                StripContent(model: wm, width: full.width, sirenPlaying: model.sirenPlaying, onMute: { model.stopSiren() })
+                    .opacity(expanded ? 0 : 1)
+                    .allowsHitTesting(!expanded)
             }
         }
-        .frame(width: cs.width, height: cs.height, alignment: .topLeading)
+        .frame(width: full.width, height: expanded ? full.height : StripContent.height, alignment: .top)
+        .background(AlertWidgetBackground(alarm: alarm))
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(.white.opacity(alarm ? 0.18 : 0.08), lineWidth: 1))
+        .overlay(alignment: .bottomLeading) {
+            if compact && ui.pinned && expanded {
+                Image(systemName: "pin.fill").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.tertiary)
+                    .rotationEffect(.degrees(45)).padding(10).help("Закріплено — клік, щоб згорнути")
+            }
+        }
+        .shadow(color: alarm ? Theme.red.opacity(0.4) : .black.opacity(0.35), radius: 14, y: 6)
+        .contentShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .onTapGesture { if compact { ui.togglePin() } }
+        .frame(width: panel.width, height: panel.height, alignment: .topLeading)
         .scaleEffect(prefs.widgetScale, anchor: .topLeading)
-        .frame(width: cs.width * prefs.widgetScale, height: cs.height * prefs.widgetScale, alignment: .topLeading)
+        .frame(width: panel.width * prefs.widgetScale, height: panel.height * prefs.widgetScale, alignment: .topLeading)
         .padding(DesktopUIState.shadowPad)
         .gesture(WindowDragGesture.make())
         .contextMenu {
@@ -155,20 +179,6 @@ struct DesktopWidgetRoot: View {
                 }
         )
     }
-
-    private func card(_ size: WidgetSize) -> some View {
-        let wm = model.widgetModel
-        let alarm = wm.isAlarm && size != .large
-        return AlertWidgetView(model: wm, size: size, more: prefs.compactMode ? nil : moreButton,
-                               sirenPlaying: model.sirenPlaying, onMute: { model.stopSiren() })
-            .frame(width: size.size.width, height: size.size.height)
-            .background(AlertWidgetBackground(alarm: alarm))
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.white.opacity(alarm ? 0.18 : 0.08), lineWidth: 1))
-            .shadow(color: alarm ? Theme.red.opacity(0.4) : .black.opacity(0.35), radius: 14, y: 6)
-    }
-
-    private var shadowColor: Color { model.widgetModel.isAlarm ? Theme.red.opacity(0.4) : .black.opacity(0.35) }
 }
 
 /// Hosting view: lets the borderless window be dragged and reports hover (works even when the app is inactive).
