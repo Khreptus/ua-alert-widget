@@ -104,8 +104,8 @@ final class AppModel: ObservableObject {
     /// Compare city status with the previous one → siren / notifications.
     private func evaluate() {
         guard let city, let st = status else { return }
-        AlertHistory.shared.update(cityID: city.id, level: st.level, since: st.since)
-        NotchController.shared.setOngoing(st.level == .alert ? (st.since ?? Date()) : nil)
+        AlertHistory.shared.update(cityID: city.id, level: st.level >= .threat ? .alert : .none, since: st.since)
+        NotchController.shared.setOngoing(st.level >= .threat ? (st.since ?? Date()) : nil)
         if city.id != lastCityID {
             // City changed: just remember state, no siren.
             lastCityID = city.id; lastLevel = st.level; lastHigh = st.highThreat
@@ -133,9 +133,9 @@ final class AppModel: ObservableObject {
         } else if st.level == .threat && prev < .threat {
             if prefs.sirenOnThreat { playSiren() }
             if prefs.bannerOnThreat || prefs.sirenOnThreat {
-                notify(title: "🟡 Загроза дронів / ракет — \(city.displayName)", body: city.raion, silent: !prefs.sirenOnThreat)
+                notify(title: "🟡 Тривога (дрони / ракети) — \(city.displayName)", body: city.raion, silent: !prefs.sirenOnThreat)
             }
-            NotchController.shared.show(.init(kind: .threat, title: "Загроза дронів / ракет", subtitle: "\(city.displayName) · \(city.raion)", target: st.etaKind ?? st.nearestKind))
+            NotchController.shared.show(.init(kind: .threat, title: "Тривога · дрони / ракети", subtitle: "\(city.displayName) · \(city.raion)", target: st.etaKind ?? st.nearestKind))
             reloadWidgets(force: true)
         } else if st.level == .recon && prev > .recon {
             stopSiren()

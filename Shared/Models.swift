@@ -199,6 +199,8 @@ public struct Snapshot: Codable, Sendable {
         public var reconRaions = 0
         public var alertOblasts = 0
         public var targets = 0
+        /// Red + yellow: both are air-raid alerts.
+        public var totalAlert: Int { alertRaions + threatRaions }
     }
 
     public func summary(geo: GeoStore = .shared) -> Summary {

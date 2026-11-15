@@ -359,8 +359,8 @@ private struct CountryStats: View {
     var body: some View {
         let s = model.snapshot.summary()
         HStack(spacing: 8) {
-            tile("\(s.alertRaions)", Fmt.plural(s.alertRaions, "район у тривозі", "райони в тривозі", "районів у тривозі"), Color(hex: 0xFF6B5E))
-            tile("\(s.threatRaions)", "загроза", Color(hex: 0xE0A84E))
+            tile("\(s.totalAlert)", Fmt.plural(s.totalAlert, "район у тривозі", "райони в тривозі", "районів у тривозі"), Color(hex: 0xFF6B5E))
+            tile("\(s.threatRaions)", "з них жовта", Color(hex: 0xE0A84E))
             tile("\(s.targets)", "цілей у повітрі", .white)
         }
     }

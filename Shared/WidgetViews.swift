@@ -72,7 +72,7 @@ struct StateText {
         guard let s else { return ("Оберіть місто", Theme.secondary) }
         switch s.level {
         case .alert: return ("Тривога", Theme.red)
-        case .threat: return ("Загроза", Theme.amber)
+        case .threat: return ("Тривога", Theme.amber)
         case .recon: return ("Дорозвідка", Theme.amber)
         case .none: return s.highThreat ? ("Висока загроза", Theme.amber) : ("Спокійно", Theme.green)
         }
@@ -84,7 +84,7 @@ struct StateText {
         if s.highThreat, let e = s.etaMinutes { return "\(s.etaKind?.title ?? "Ціль") · підліт ~\(Fmt.eta(e))" }
         if let km = s.nearestKm, km < 150, s.highThreat { return "\(s.nearestKind?.title ?? "Ціль") за \(Int(km)) км" }
         switch s.level {
-        case .threat: return "Дрони / ракети"
+        case .threat: return "Жовта · дрони / ракети"
         case .recon: return "Перед відбоєм"
         default: return "Тривоги немає"
         }
@@ -110,7 +110,7 @@ struct LegendView: View {
     var body: some View {
         HStack(spacing: 10) {
             item(Theme.mapRed, "Тривога")
-            item(Theme.mapAmber, "Загроза")
+            item(Theme.mapAmber, "Жовта")
             HStack(spacing: 4) { StripedSwatch(); Text("Дорозвідка").font(.system(size: 11)).foregroundStyle(Theme.secondary) }
             if showTargets {
                 HStack(spacing: 4) {
@@ -151,7 +151,7 @@ struct CityRow: View {
         guard let s else { return "" }
         switch s.level {
         case .alert: return "Тривога" + (Fmt.duration(since: s.since, now: m.now).map { " · \($0)" } ?? "")
-        case .threat: return "Загроза · дрони/ракети"
+        case .threat: return "Жовта тривога · дрони/ракети"
         case .recon: return "Дорозвідка"
         case .none: return s.highThreat ? "Висока загроза" : "Тривоги немає"
         }
@@ -240,7 +240,7 @@ struct MediumView: View {
                         .background(Capsule().fill(.white))
                     }.buttonStyle(.plain)
                 } else {
-                    Text("По країні: \(sum.alertRaions) \(Fmt.plural(sum.alertRaions, "район", "райони", "районів"))\(m.showTargets && sum.targets > 0 ? " · \(sum.targets) цілей" : "")")
+                    Text("По країні: \(sum.totalAlert) \(Fmt.plural(sum.totalAlert, "район", "райони", "районів"))\(m.showTargets && sum.targets > 0 ? " · \(sum.targets) цілей" : "")")
                         .font(.system(size: 11)).foregroundStyle(m.isAlarm ? .white.opacity(0.7) : Theme.tertiary).lineLimit(1)
                 }
             }
@@ -278,8 +278,7 @@ struct LargeView: View {
     }
 
     func summaryLine(_ s: Snapshot.Summary) -> String {
-        var parts = ["\(s.alertRaions) \(Fmt.plural(s.alertRaions, "район", "райони", "районів"))"]
-        if m.showThreat { parts.append("\(s.threatRaions) загроза") }
+        var parts = ["\(s.totalAlert) \(Fmt.plural(s.totalAlert, "район", "райони", "районів")) у тривозі"]
         if m.showTargets { parts.append("\(s.targets) \(Fmt.plural(s.targets, "ціль", "цілі", "цілей"))") }
         return parts.joined(separator: " · ")
     }
@@ -335,7 +334,7 @@ public struct StripContent: View {
                 Button(action: onMute) { Image(systemName: "speaker.slash.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(Color(hex: 0xB3140F)).frame(width: 24, height: 22).background(Capsule().fill(.white)) }
                     .buttonStyle(.plain).help("Вимкнути звук")
             } else if roomy {
-                Text("\(sum.alertRaions) р-н\(m.showTargets ? " · \(sum.targets) ц." : "")")
+                Text("\(sum.totalAlert) р-н\(m.showTargets ? " · \(sum.targets) ц." : "")")
                     .font(.system(size: 11, weight: .medium)).foregroundStyle(alarm ? .white.opacity(0.75) : Theme.tertiary).monospacedDigit().lineLimit(1)
             }
             Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold)).foregroundStyle(alarm ? .white.opacity(0.7) : Theme.tertiary)

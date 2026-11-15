@@ -148,7 +148,7 @@ struct WidgetSettingsPopover: View {
                 toggleRow("Повітряні цілі", "dimap · neptun · ukrainealarm", $prefs.showTargets)
                 toggleRow("Сирена — тривога", "Масштабна (червона)", $prefs.sirenOnAlert)
                 toggleRow("Сирена — загроза", "Дрони / ракети (жовта)", $prefs.sirenOnThreat)
-                toggleRow("Загроза і дорозвідка", "Жовтим і смугами на карті", $prefs.showThreat)
+                toggleRow("Жовта тривога і дорозвідка", "Жовтим і смугами на карті", $prefs.showThreat)
                 row("Карта") {
                     Picker("", selection: $prefs.mapMode) { ForEach(MapMode.allCases) { Text($0.title).tag($0) } }
                         .pickerStyle(.segmented).labelsHidden().frame(width: 150)
