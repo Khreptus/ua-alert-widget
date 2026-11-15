@@ -232,12 +232,16 @@ private struct ThreatsList: View {
 
     var rows: [Row] {
         guard let c = model.city, prefs.showTargets else { return [] }
-        return model.snapshot.targets.map { t in
-            Row(id: t.id, t: t, km: Geo.distanceKm(lat1: c.lat, lon1: c.lon, lat2: t.lat, lon2: t.lon), eta: Projection.eta(t, toLat: c.lat, lon: c.lon))
+        var out: [Row] = []
+        for t in model.snapshot.targets {
+            let km: Double = Geo.distanceKm(lat1: c.lat, lon1: c.lon, lat2: t.lat, lon2: t.lon)
+            let eta: Double? = Projection.eta(t, toLat: c.lat, lon: c.lon)
+            let close: Bool = km < 150 || (eta ?? 999) <= 30
+            if close { out.append(Row(id: t.id, t: t, km: km, eta: eta)) }
         }
-        .filter { $0.km < 150 || ($0.eta ?? 999) <= 30 }
-        .sorted { ($0.eta ?? 1000 + $0.km) < ($1.eta ?? 1000 + $1.km) }
-        .prefix(4).map { $0 }
+        func rank(_ r: Row) -> Double { r.eta ?? (1000 + r.km) }
+        out.sort { rank($0) < rank($1) }
+        return Array(out.prefix(4))
     }
 
     var body: some View {
