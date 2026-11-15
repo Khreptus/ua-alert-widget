@@ -238,24 +238,37 @@ public struct UAMapView: View {
                     if l > (oblastLevel[r.oblast] ?? .none) { oblastLevel[r.oblast] = l }
                 }
             }
+            let hi = z >= 2.2
             for r in geo.raions {
-                let p = r.path.applying(tf)
+                let p = (hi ? r.pathHi : r.path).applying(tf)
                 guard p.boundingRect.intersects(view) else { continue }
                 let level = mode == .raions ? snapshot.raionState(r.name, oblast: r.oblast).level : (oblastLevel[r.oblast] ?? .none)
                 let fillOpacity = level == .none || (!showThreat && level < .alert) ? 1 - detail : 1 - 0.58 * detail
                 if fillOpacity > 0.01 { ctx.fill(p, with: .color(Theme.color(level, showThreat: showThreat).opacity(fillOpacity))) }
                 if level == .recon && showThreat { var c = ctx; c.opacity = 1 - 0.5 * detail; Stripes.draw(in: c, path: p, scale: lw) }
-                if mode == .raions { ctx.stroke(p, with: .color(Theme.raionBorder.opacity(1 - 0.6 * detail)), lineWidth: max(0.35, 0.8 * lw)) }
+                if mode == .raions { ctx.stroke(p, with: .color(Theme.raionBorder.opacity(1 - 0.6 * detail)), style: StrokeStyle(lineWidth: max(0.35, 0.7 * lw), lineCap: .round, lineJoin: .round)) }
             }
-            ctx.stroke(geo.oblastBorders.applying(tf), with: .color(Theme.oblastBorder), style: StrokeStyle(lineWidth: max(0.7, 1.6 * lw), lineJoin: .round))
+            // Cities with their own status (Kyiv, Sevastopol): filled outline.
+            for c in geo.cities {
+                let p = (hi ? c.pathHi : c.path).applying(tf)
+                guard p.boundingRect.intersects(view) else { continue }
+                let level = snapshot.cities[c.name]?.level ?? .none
+                let col = level == .recon ? Theme.mapAmber : Theme.color(level, showThreat: showThreat)
+                let op = level == .none ? 1 - detail : 1 - 0.58 * detail
+                if op > 0.01 { ctx.fill(p, with: .color(col.opacity(op))) }
+                ctx.stroke(p, with: .color(Theme.raionBorder.opacity(1 - 0.6 * detail)), lineWidth: max(0.35, 0.8 * lw))
+            }
+            ctx.stroke((hi ? geo.oblastBordersHi : geo.oblastBorders).applying(tf), with: .color(Theme.oblastBorder.opacity(1 - 0.35 * detail)), style: StrokeStyle(lineWidth: max(0.7, 1.4 * lw), lineCap: .round, lineJoin: .round))
 
-            // Kyiv city
+            // Kyiv city dot (only while the city outline is too small to see)
+            if z < 3 {
             let kyiv = pt(50.45, 30.52)
             let kyivLevel = snapshot.cities["м. Київ"]?.level ?? .none
             let kr = max(2.5, 5 * lw)
             let kRect = CGRect(x: kyiv.x - kr, y: kyiv.y - kr, width: kr * 2, height: kr * 2)
             ctx.fill(Path(ellipseIn: kRect), with: .color(kyivLevel == .recon ? Theme.mapAmber : Theme.color(kyivLevel, showThreat: showThreat)))
             ctx.stroke(Path(ellipseIn: kRect), with: .color(Theme.oblastBorder), lineWidth: 1)
+            }
 
             // Air targets: flight cones first (under everything), then icons.
             if showTargets {

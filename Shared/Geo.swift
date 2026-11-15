@@ -47,17 +47,26 @@ public struct RaionShape: Sendable {
     public let name: String
     public let oblast: String
     public let path: Path
+    /// Full-detail outline for close zoom.
+    public let pathHi: Path
+}
+
+public struct CityShape: Sendable {
+    public let name: String
+    public let path: Path
+    public let pathHi: Path
 }
 
 private struct GeoFile: Decodable {
     struct Proj: Decodable { let g: Double; let ox: Double; let oy: Double }
-    struct R: Decodable { let name: String; let oblast: String; let rings: [[Double]] }
-    struct O: Decodable { let name: String; let rings: [[Double]] }
+    struct R: Decodable { let name: String; let oblast: String; let rings: [[Double]]; let hi: [[Double]]? }
+    struct O: Decodable { let name: String; let rings: [[Double]]; let hi: [[Double]]? }
     let width: Double
     let height: Double
     let proj: Proj
     let raions: [R]
     let oblasts: [O]
+    let cities: [O]?
 }
 
 /// Map geometry (projected to a 680-wide canvas) + list of hromadas.
@@ -68,6 +77,8 @@ public final class GeoStore: @unchecked Sendable {
     public let height: CGFloat
     public let raions: [RaionShape]
     public let oblastBorders: Path
+    public let oblastBordersHi: Path
+    public let cities: [CityShape]
     public let oblastShapes: [String: Path]
     public let hromadas: [Hromada]
     /// Web-Mercator: map unit = world-pixel(zoom 0, 256 px) × g − offset.
@@ -81,7 +92,8 @@ public final class GeoStore: @unchecked Sendable {
         let bundle = Bundle.main
         var w: CGFloat = 680, h: CGFloat = 453
         var rs: [RaionShape] = []
-        var borders = Path()
+        var borders = Path(), bordersHi = Path()
+        var cs: [CityShape] = []
         var obl: [String: Path] = [:]
         var p = (g: 52.86014132521543, ox: 7598.214709740463, oy: 4446.620731212759)
         if let url = bundle.url(forResource: "geo", withExtension: "json"),
@@ -89,14 +101,16 @@ public final class GeoStore: @unchecked Sendable {
            let g = try? JSONDecoder().decode(GeoFile.self, from: data) {
             w = g.width; h = g.height
             p = (g.proj.g, g.proj.ox, g.proj.oy)
-            rs = g.raions.map { RaionShape(name: $0.name, oblast: $0.oblast, path: GeoStore.path($0.rings)) }
+            rs = g.raions.map { RaionShape(name: $0.name, oblast: $0.oblast, path: GeoStore.path($0.rings), pathHi: GeoStore.path($0.hi ?? $0.rings)) }
             for o in g.oblasts {
                 let path = GeoStore.path(o.rings)
                 borders.addPath(path)
+                bordersHi.addPath(GeoStore.path(o.hi ?? o.rings))
                 obl[o.name] = path
             }
+            cs = (g.cities ?? []).map { CityShape(name: $0.name, path: GeoStore.path($0.rings), pathHi: GeoStore.path($0.hi ?? $0.rings)) }
         }
-        width = w; height = h; raions = rs; oblastBorders = borders; oblastShapes = obl; proj = p
+        width = w; height = h; raions = rs; oblastBorders = borders; oblastBordersHi = bordersHi; cities = cs; oblastShapes = obl; proj = p
 
         var hs: [Hromada] = []
         if let url = bundle.url(forResource: "hromady", withExtension: "json"),
