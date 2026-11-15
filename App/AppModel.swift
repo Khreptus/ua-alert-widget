@@ -55,7 +55,6 @@ final class AppModel: ObservableObject {
 
     func start() {
         observeSleep()
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
         Task { await refresh() }
         timer = Timer.scheduledTimer(withTimeInterval: 6, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refresh() }
@@ -133,7 +132,7 @@ final class AppModel: ObservableObject {
             // Just woke up: silent summary only.
             rebaseline = false
             if st.isAlarm, (lastLevel ?? .none) < .threat {
-                notify(title: "🔴 Триває тривога — \(city.displayName)", body: city.raion, silent: true)
+                NotchController.shared.show(.init(kind: .alert, title: st.attack.map { "Триває тривога · \($0)" } ?? "Триває тривога", subtitle: "\(city.displayName) · з \(Fmt.time(st.since ?? Date()))"))
             }
             lastLevel = st.level; lastHigh = st.highThreat
             reloadWidgets(force: true)
@@ -209,12 +208,7 @@ final class AppModel: ObservableObject {
         objectWillChange.send()
     }
 
-    private func notify(title: String, body: String, silent: Bool = false) {
-        let c = UNMutableNotificationContent()
-        c.title = title
-        c.body = body
-        if !silent && !sirenPlaying && !asleep { c.sound = .default }
-        c.interruptionLevel = .timeSensitive
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: c, trigger: nil))
-    }
+    /// System notifications are disabled: all notifications go to the notch.
+    private func notify(title: String, body: String, silent: Bool = false) {}
+
 }

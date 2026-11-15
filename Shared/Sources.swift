@@ -306,34 +306,18 @@ public final class Aggregator: @unchecked Sendable {
     }
 
     public func fetch() async -> Snapshot {
+        // Alerts come only from ukrainealarm (official). dimap / neptun are used for air targets only.
         async let ua = run("ukrainealarm") { try await UkraineAlarmClient.fetch() }
-        async let dmA = run("dimap.live") { try await DimapClient.alerts() }
         async let dmT = run("dimap.live цілі") { try await DimapClient.targets() }
-        async let rr = run("radarua.com") { try await RadarUAClient.alerts() }
-        async let dmN = run("dimap.live стрічка") { try await DimapClient.recon() }
         async let np = run("neptun.in.ua") { try await NeptunClient.threats() }
-        let (uaR, dmAR, dmTR, rrR, dmNR, npR) = await (ua, dmA, dmT, rr, dmN, np)
+        let (uaR, dmTR, npR) = await (ua, dmT, np)
         lastUA = uaR.0?.targets ?? lastUA
         lastNP = npR.0 ?? lastNP
 
         var s = Snapshot()
-        // Official first
         if let u = uaR.0 {
             s.raions = u.raions; s.oblasts = u.oblasts; s.cities = u.cities; s.hromadas = u.hromadas
         }
-        // dimap: alerts + threat zones
-        if let d = dmAR.0 {
-            for (k, v) in d.raions { s.raions[k] = v.merged(with: s.raions[k]) }
-            for (k, v) in d.cities { s.cities[k] = v.merged(with: s.cities[k]) }
-        }
-        // radarua: fallback / extra confirmation
-        if let r = rrR.0 {
-            let officialDown = uaR.0 == nil
-            for (k, v) in r.raions where officialDown || v.level == .threat || s.raions[k] == nil { s.raions[k] = v.merged(with: s.raions[k]) }
-            for (k, v) in r.cities where officialDown || s.cities[k] == nil { s.cities[k] = v.merged(with: s.cities[k]) }
-        }
-        // Дорозвідка from the news feed: only where there is no active alert/threat
-        if let rc = dmNR.0 { Aggregator.applyRecon(rc, to: &s) }
         // Targets: dimap first, then ukrainealarm and neptun fill the gaps
         if dmTR.1.ok {
             // dimap is the reference: show only its targets; other services only add details (course, model).
@@ -347,7 +331,7 @@ public final class Aggregator: @unchecked Sendable {
             t.kind == .fpv || ["Ланцет", "Молнія"].contains { (t.model ?? "").contains($0) }
         }
 
-        s.sources = [uaR.1, SourceStatus(name: "dimap.live", ok: dmAR.1.ok || dmTR.1.ok, detail: dmAR.1.ok ? (dmTR.1.ok ? "OK" : "без цілей") : dmAR.1.detail), rrR.1, SourceStatus(name: "neptun.in.ua", ok: npR.1.ok, detail: npR.1.detail)]
+        s.sources = [uaR.1, SourceStatus(name: "dimap.live", ok: dmTR.1.ok, detail: dmTR.1.detail), SourceStatus(name: "neptun.in.ua", ok: npR.1.ok, detail: npR.1.detail)]
         s.updated = Date()
         return s
     }
