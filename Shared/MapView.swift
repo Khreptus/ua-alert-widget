@@ -301,6 +301,26 @@ public struct UAMapView: View {
                     line.move(to: start)
                     for q in cone.center { line.addLine(to: pt(q.lat, q.lon)) }
                     ctx.stroke(line, with: .color(col.opacity(0.85)), style: StrokeStyle(lineWidth: max(0.8, 1.1 * min(1.6, sqrt(z))), lineCap: .round, dash: [3, 2.5]))
+                    // Time marks along the course, like dimap: tick every minute-step, label at mid and tip.
+                    let pts = cone.center.map { pt($0.lat, $0.lon) }
+                    let len = zip([start] + pts, pts).reduce(0) { $0 + hypot($1.1.x - $1.0.x, $1.1.y - $1.0.y) }
+                    if len > 36, pts.count >= 4 {
+                        let n = pts.count
+                        let marks: [Int] = len > 110 ? [n / 2 - 1, n - 1] : [n - 1]
+                        for i in marks {
+                            let m = minutes * Double(i + 1) / Double(n)
+                            let q = pts[i]
+                            ctx.fill(Path(ellipseIn: CGRect(x: q.x - 2, y: q.y - 2, width: 4, height: 4)), with: .color(col))
+                            let label = ctx.resolve(Text(Fmt.eta(m)).font(.system(size: 8.5, weight: .bold)).foregroundColor(.black))
+                            let ts = label.measure(in: CGSize(width: 80, height: 20))
+                            // Offset to the side of the course so the label doesn't cover the line.
+                            let a = i > 0 ? atan2(q.y - pts[i - 1].y, q.x - pts[i - 1].x) : 0
+                            let c = CGPoint(x: q.x + cos(a + .pi / 2) * (ts.width / 2 + 6), y: q.y + sin(a + .pi / 2) * (ts.height / 2 + 5))
+                            let bg = CGRect(x: c.x - ts.width / 2 - 3.5, y: c.y - ts.height / 2 - 1, width: ts.width + 7, height: ts.height + 2)
+                            ctx.fill(Path(roundedRect: bg, cornerRadius: bg.height / 2), with: .color(col.opacity(0.92)))
+                            ctx.draw(label, at: c)
+                        }
+                    }
                 }
 
                 let base = max(9, min(13, 17 * s))
