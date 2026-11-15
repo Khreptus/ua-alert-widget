@@ -8,6 +8,26 @@ final class Prefs: ObservableObject {
     private let d = UserDefaults.standard
 
     @Published var cityID: String { didSet { d.set(cityID, forKey: "cityID") } }
+    /// Exact point picked by the user (map / address / my location). nil → the hromada itself.
+    @Published var customPoint: CustomPoint? { didSet { save(customPoint) } }
+
+    struct CustomPoint: Codable, Equatable { var lat: Double; var lon: Double; var label: String }
+
+    private func save(_ p: CustomPoint?) {
+        if let p, let data = try? JSONEncoder().encode(p) { d.set(data, forKey: "customPoint") } else { d.removeObject(forKey: "customPoint") }
+    }
+
+    /// Picks a hromada from the list (drops any custom point).
+    func pickHromada(_ id: String) { customPoint = nil; cityID = id }
+
+    /// Sets an exact point; the hromada/raion are derived from it.
+    @discardableResult
+    func pickPoint(lat: Double, lon: Double, label: String) -> Bool {
+        guard let h = GeoStore.shared.locate(lat: lat, lon: lon, label: label) else { return false }
+        cityID = h.id
+        customPoint = CustomPoint(lat: lat, lon: lon, label: label)
+        return true
+    }
     @Published var showTargets: Bool { didSet { d.set(showTargets, forKey: "showTargets") } }
     @Published var showThreat: Bool { didSet { d.set(showThreat, forKey: "showThreat") } }
     @Published var mapMode: MapMode { didSet { d.set(mapMode.rawValue, forKey: "mapMode") } }
@@ -34,6 +54,7 @@ final class Prefs: ObservableObject {
             "showDesktopWidget": true, "widgetSize": WidgetSize.large.rawValue, "widgetScale": 1.0, "widgetOnTop": false, "compactMode": true,
         ])
         cityID = d.string(forKey: "cityID") ?? ""
+        customPoint = d.data(forKey: "customPoint").flatMap { try? JSONDecoder().decode(CustomPoint.self, from: $0) }
         showTargets = d.bool(forKey: "showTargets")
         showThreat = d.bool(forKey: "showThreat")
         mapMode = MapMode(rawValue: d.string(forKey: "mapMode") ?? "") ?? .raions
@@ -52,5 +73,8 @@ final class Prefs: ObservableObject {
         compactMode = d.bool(forKey: "compactMode")
     }
 
-    var city: Hromada? { GeoStore.shared.hromada(id: cityID) ?? GeoStore.shared.defaultCity }
+    var city: Hromada? {
+        if let p = customPoint, let h = GeoStore.shared.locate(lat: p.lat, lon: p.lon, label: p.label) { return h }
+        return GeoStore.shared.hromada(id: cityID) ?? GeoStore.shared.defaultCity
+    }
 }

@@ -1,0 +1,24 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="maplibre-gl.css">
+<style>html,body{margin:0;height:100%;background:transparent;overflow:hidden}#m{position:absolute;inset:0}</style>
+<script src="maplibre-gl.js"></script></head>
+<body><div id="m"></div>
+<script>
+const styles={dark:'https://tiles.openfreemap.org/styles/dark',light:'https://tiles.openfreemap.org/styles/positron'};
+let cur='dark';
+const map=new maplibregl.Map({container:'m',style:styles.dark,interactive:false,attributionControl:false,
+  center:[31.2,48.6],zoom:5,fadeDuration:0,renderWorldCopies:false,pixelRatio:window.devicePixelRatio||2});
+function ukLabels(){
+  for(const l of map.getStyle().layers){
+    if(l.type==='symbol'&&l.layout&&l.layout['text-field']!==undefined){
+      map.setLayoutProperty(l.id,'text-field',['coalesce',['get','name:uk'],['get','name'],['get','name_en']]);
+    }
+  }
+}
+map.on('style.load',ukLabels);
+window.jump=(lat,lon,z,theme)=>{
+  if(theme&&theme!==cur){cur=theme;map.setStyle(styles[theme]);}
+  map.jumpTo({center:[lon,lat],zoom:z});
+};
+</script></body></html>

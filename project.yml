@@ -27,6 +27,8 @@ targets:
         CFBundleDisplayName: "Тривога UA"
         CFBundleName: "UA Alert"
         LSUIElement: true
+        NSLocationUsageDescription: "Щоб показувати тривоги й час підльоту саме для вашого місця."
+        NSLocationWhenInUseUsageDescription: "Щоб показувати тривоги й час підльоту саме для вашого місця."
         LSApplicationCategoryType: public.app-category.utilities
         NSHumanReadableCopyright: "Дані: map.ukrainealarm.com, dimap.live, radarua.com"
         CFBundleURLTypes:
@@ -37,6 +39,7 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
+        com.apple.security.personal-information.location: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.khreptus.uaalert

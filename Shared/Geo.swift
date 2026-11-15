@@ -12,7 +12,10 @@ public struct Hromada: Codable, Hashable, Identifiable, Sendable {
     public var id: String { "\(name)|\(raion)" }
 
     /// "Ірпінська міська громада" → "Ірпінська громада"; "Київ" stays.
-    public var displayName: String {
+    public var displayName: String { label ?? baseName }
+
+    /// "Ірпінська міська громада" → "Ірпінська громада".
+    public var baseName: String {
         var n = name
         for s in [" міська територіальна громада", " селищна територіальна громада", " сільська територіальна громада", " міська громада", " селищна громада", " сільська громада", " територіальна громада"] {
             if n.hasSuffix(s) { n = String(n.dropLast(s.count)) + " громада"; break }
@@ -32,7 +35,7 @@ public struct Hromada: Codable, Hashable, Identifiable, Sendable {
     /// Key used for city-level entries in dimap/radarua ("м. Київ").
     public var cityKey: String {
         if raion == "Київ" || name == "Київ" { return "м. Київ" }
-        return "м. " + displayName.replacingOccurrences(of: " громада", with: "")
+        return "м. " + baseName.replacingOccurrences(of: " громада", with: "")
     }
 
     public var isKyiv: Bool { raion == "Київ" || name == "Київ" }
@@ -163,6 +166,36 @@ public final class GeoStore: @unchecked Sendable {
     public var popular: [Hromada] {
         let names = ["Київ", "Харківська міська громада", "Одеська міська громада", "Дніпровська міська громада", "Львівська міська громада", "Запорізька міська громада", "Ірпінська міська громада", "Бучанська міська громада", "Вінницька міська громада", "Полтавська міська громада", "Чернігівська міська громада", "Сумська міська громада", "Миколаївська міська громада", "Житомирська міська громада", "Черкаська міська громада", "Кропивницька міська громада", "Хмельницька міська громада", "Рівненська міська громада", "Луцька міська громада", "Тернопільська міська громада", "Івано-Франківська міська громада", "Ужгородська міська громада", "Чернівецька міська громада", "Херсонська міська громада"]
         return names.compactMap { n in hromadas.first { $0.name == n } }
+    }
+
+    /// Inverse of `project`: map point → lat/lon.
+    public func unproject(_ p: CGPoint) -> (lat: Double, lon: Double) {
+        let w = world(p)
+        let lon = Double(w.x) / 256 * 360 - 180
+        let lat = atan(sinh(.pi * (1 - 2 * Double(w.y) / 256))) * 180 / .pi
+        return (lat, lon)
+    }
+
+    /// Raion (name, oblast) containing the point, nil outside Ukraine. Kyiv/Sevastopol return the city.
+    public func raion(atLat lat: Double, lon: Double) -> (name: String, oblast: String)? {
+        let p = project(lat: lat, lon: lon)
+        if let c = cities.first(where: { $0.pathHi.contains(p) }) {
+            return c.name == "м. Київ" ? ("Київ", "Київ") : ("Севастополь", "Севастополь")
+        }
+        if let r = raions.first(where: { $0.path.boundingRect.contains(p) && $0.pathHi.contains(p) }) { return (r.name, r.oblast) }
+        return nil
+    }
+
+    /// A user-picked point: the hromada it belongs to (nearest hromada of the containing raion),
+    /// moved to the exact point and labelled with the place name.
+    public func locate(lat: Double, lon: Double, label: String?) -> Hromada? {
+        let r = raion(atLat: lat, lon: lon)
+        let pool = r.map { rr in hromadas.filter { $0.raion == rr.name || ($0.isKyiv && rr.name == "Київ") } } ?? []
+        let cands = pool.isEmpty ? hromadas : pool
+        guard var h = cands.min(by: { Geo.distanceKm(lat1: $0.lat, lon1: $0.lon, lat2: lat, lon2: lon) < Geo.distanceKm(lat1: $1.lat, lon1: $1.lon, lat2: lat, lon2: lon) }) else { return nil }
+        h.lat = lat; h.lon = lon
+        h.label = (label?.isEmpty == false) ? label : h.baseName
+        return h
     }
 
     public func search(_ q: String, limit: Int = 40) -> [Hromada] {

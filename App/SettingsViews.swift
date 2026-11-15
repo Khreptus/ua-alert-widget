@@ -7,25 +7,85 @@ struct CityPicker: View {
     @EnvironmentObject var prefs: Prefs
     @EnvironmentObject var model: AppModel
     @State private var query = ""
+    @State private var places: [PlaceHit] = []
+    @State private var locating = false
+    @State private var locError: String?
     var onPick: (() -> Void)? = nil
+
+    private func usePoint(_ lat: Double, _ lon: Double, _ label: String) {
+        if prefs.pickPoint(lat: lat, lon: lon, label: label) { model.cityChanged(); onPick?() }
+        else { locError = "Ця точка поза межами України." }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Місто або громада", text: $query).textFieldStyle(.plain)
+                TextField("Місто, громада або адреса", text: $query).textFieldStyle(.plain)
                 if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }.buttonStyle(.plain) }
             }
             .padding(.horizontal, 10).padding(.vertical, 7)
             .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.06)))
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.blue.opacity(0.8), lineWidth: 1))
 
+            HStack(spacing: 6) {
+                Button { PointPickerWindow.show() } label: {
+                    Label("Точка на карті", systemImage: "mappin.and.ellipse").frame(maxWidth: .infinity)
+                }
+                Button {
+                    locating = true; locError = nil
+                    MyLocation.shared.request { loc, err in
+                        guard let loc else { locating = false; locError = err; return }
+                        Task {
+                            let n = await Places.name(lat: loc.coordinate.latitude, lon: loc.coordinate.longitude)
+                            locating = false
+                            usePoint(loc.coordinate.latitude, loc.coordinate.longitude, n ?? "Моє місце")
+                        }
+                    }
+                } label: {
+                    Label(locating ? "Визначаю…" : "Моє місце", systemImage: "location.fill").frame(maxWidth: .infinity)
+                }
+                .disabled(locating)
+            }
+            .controlSize(.regular)
+            if let locError { Text(locError).font(.system(size: 11)).foregroundStyle(Theme.amber).fixedSize(horizontal: false, vertical: true) }
+            if let p = prefs.customPoint {
+                HStack(spacing: 6) {
+                    Image(systemName: "mappin.circle.fill").foregroundStyle(Theme.blue)
+                    Text(p.label).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                    Spacer()
+                    Text("точна точка").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 7).fill(Theme.blue.opacity(0.15)))
+            }
+
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
+                    if !places.isEmpty {
+                        Text("Адреси").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 10).padding(.top, 2)
+                        ForEach(places) { pl in
+                            Button { usePoint(pl.lat, pl.lon, pl.title) } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "mappin").foregroundStyle(Theme.blue)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(pl.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                                        if !pl.subtitle.isEmpty { Text(pl.subtitle).font(.system(size: 11)).opacity(0.7).lineLimit(1) }
+                                    }
+                                    Spacer()
+                                }
+                                .foregroundStyle(Theme.text)
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        Text("Громади").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 10).padding(.top, 4)
+                    }
                     ForEach(GeoStore.shared.search(query, limit: 50)) { h in
-                        let selected = h.id == prefs.cityID
+                        let selected = h.id == prefs.cityID && prefs.customPoint == nil
                         Button {
-                            prefs.cityID = h.id
+                            prefs.pickHromada(h.id)
                             model.cityChanged()
                             onPick?()
                         } label: {
@@ -46,6 +106,14 @@ struct CityPicker: View {
                     }
                 }
             }
+        }
+        .task(id: query) {
+            let q = query.trimmingCharacters(in: .whitespaces)
+            guard q.count >= 3 else { places = []; return }
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            if Task.isCancelled { return }
+            let r = await Places.search(q)
+            if !Task.isCancelled { places = Array(r.prefix(5)) }
         }
     }
 }

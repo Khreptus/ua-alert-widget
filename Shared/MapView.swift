@@ -64,18 +64,24 @@ public struct UAMapView: View {
     var showThreat: Bool
     var mode: MapMode
     var pinColor: Color
+    /// When set, a click on the map reports the point (lat, lon) instead of zooming.
+    var onPick: ((Double, Double) -> Void)? = nil
+    /// Initial view: centre (lat, lon) and zoom.
+    var focus: (lat: Double, lon: Double, zoom: CGFloat)? = nil
 
+    @State private var didFocus = false
     @State private var zoom: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var dragStart: CGSize? = nil
-    @ObservedObject private var tiles = TileStore.shared
     @Environment(\.colorScheme) private var scheme
 
     /// Up to street level (raster tile zoom ≈ 15).
     static let maxZoom: CGFloat = 900
 
-    public init(snapshot: Snapshot, city: Hromada?, showTargets: Bool = true, showThreat: Bool = true, mode: MapMode = .raions, pinColor: Color = Theme.blue) {
+    public init(snapshot: Snapshot, city: Hromada?, showTargets: Bool = true, showThreat: Bool = true, mode: MapMode = .raions, pinColor: Color = Theme.blue,
+                onPick: ((Double, Double) -> Void)? = nil, focus: (lat: Double, lon: Double, zoom: CGFloat)? = nil) {
         self.snapshot = snapshot; self.city = city; self.showTargets = showTargets; self.showThreat = showThreat; self.mode = mode; self.pinColor = pinColor
+        self.onPick = onPick; self.focus = focus
     }
 
     public var body: some View {
@@ -83,9 +89,15 @@ public struct UAMapView: View {
         GeometryReader { gp in
             let size = gp.size
             ZStack(alignment: .topTrailing) {
+                if MapInteraction.enabled && zoom > 1.4 {
+                    let detail = max(0, min(1, (Double(zoom) - 1.4) / 1.6))
+                    BasemapView(view: basemapView(size: size), dark: scheme == .dark)
+                        .opacity(detail)
+                        .allowsHitTesting(false)
+                }
                 canvas(size: size)
                 if MapInteraction.enabled && zoom > 1.6 {
-                    Text("© OpenStreetMap")
+                    Text("© OpenFreeMap · © OpenMapTiles · © OpenStreetMap")
                         .font(.system(size: 7.5)).foregroundStyle(.white.opacity(0.55))
                         .padding(.horizontal, 4).padding(.vertical, 1.5)
                         .background(Capsule().fill(.black.opacity(0.35)))
@@ -117,8 +129,24 @@ public struct UAMapView: View {
             }
             .contentShape(Rectangle())
             .gesture(panGesture(size: size), including: MapInteraction.enabled && zoom > 1.001 ? .all : .subviews)
+            .gesture(SpatialTapGesture(coordinateSpace: .local).onEnded { v in
+                guard let onPick else { return }
+                let loc = v.location
+                let s = size.width / GeoStore.shared.width
+                let m = CGPoint(x: (loc.x - offset.width) / (s * zoom), y: (loc.y - offset.height) / (s * zoom))
+                let ll = GeoStore.shared.unproject(m)
+                onPick(ll.lat, ll.lon)
+            }, including: onPick != nil ? .all : .subviews)
+            .onAppear {
+                guard let focus, !didFocus, size.width > 0 else { return }
+                didFocus = true
+                let s = size.width / GeoStore.shared.width
+                let p = GeoStore.shared.project(lat: focus.lat, lon: focus.lon)
+                zoom = focus.zoom
+                offset = clamp(CGSize(width: size.width / 2 - p.x * s * zoom, height: size.height / 2 - p.y * s * zoom), zoom: zoom, size: size)
+            }
             .onTapGesture(count: 2) {
-                guard MapInteraction.enabled else { return }
+                guard MapInteraction.enabled, onPick == nil else { return }
                 withAnimation(.snappy(duration: 0.3)) {
                     if zoom > 1.01 { zoom = 1; offset = .zero } else { applyZoom(by: 2.5, at: CGPoint(x: size.width / 2, y: size.height / 2), size: size) }
                 }
@@ -170,74 +198,29 @@ public struct UAMapView: View {
 
     // MARK: drawing
 
-    /// Raster basemap; missing tiles fall back to a scaled-up parent tile.
-    static func drawTiles(_ ctx: GraphicsContext, size: CGSize, scale k: CGFloat, offset off: CGSize, dark: Bool, opacity: Double) {
+    /// Centre and MapLibre zoom matching the current zoom/offset.
+    private func basemapView(size: CGSize) -> (lat: Double, lon: Double, zoom: Double) {
         let geo = GeoStore.shared
-        let store = TileStore.shared
-        let ppw = geo.unitsPerWorldPixel * Double(k)          // screen points per zoom-0 world pixel
-        let tz = max(3, min(18, Int((log2(ppw) + 0.45).rounded())))
-        let n = 1 << tz
-        let a = geo.world(CGPoint(x: -off.width / k, y: -off.height / k))
-        let b = geo.world(CGPoint(x: (size.width - off.width) / k, y: (size.height - off.height) / k))
-        let w = 256 / Double(n)
-        let x0 = max(0, Int(floor(a.x / w))), x1 = min(n - 1, Int(floor(b.x / w)))
-        let y0 = max(0, Int(floor(a.y / w))), y1 = min(n - 1, Int(floor(b.y / w)))
-        guard x1 >= x0, y1 >= y0, (x1 - x0 + 1) * (y1 - y0 + 1) <= 64 else { return }
-        func screen(_ r: CGRect) -> CGRect {
-            CGRect(x: r.minX * k + off.width, y: r.minY * k + off.height, width: r.width * k, height: r.height * k)
-        }
-        store.beginFrame()
-        var c = ctx
-        c.opacity = opacity
-        c.fill(Path(CGRect(origin: .zero, size: size)), with: .color(dark ? Color(hex: 0x16171A) : Color(hex: 0xF2EFE9)))
-        if dark {
-            // Night style from the standard OSM palette: invert, swap hues back, mute.
-            c.addFilter(.colorInvert())
-            c.addFilter(.hueRotation(.degrees(180)))
-            c.addFilter(.saturation(0.55))
-            c.addFilter(.brightness(-0.06))
-            c.addFilter(.contrast(0.92))
-        }
-        for y in y0...y1 {
-            for x in x0...x1 {
-                let rect = screen(geo.tileRect(z: tz, x: x, y: y)).insetBy(dx: -0.25, dy: -0.25)
-                if let img = store.request(.init(z: tz, x: x, y: y, dark: dark)) {
-                    c.draw(Image(nsImage: img), in: rect)
-                    continue
-                }
-                // Fallback: nearest cached ancestor, clipped to this tile.
-                var pz = tz - 1, px = x / 2, py = y / 2
-                while pz >= max(0, tz - 5) {
-                    if let img = store.image(.init(z: pz, x: px, y: py, dark: dark)) {
-                        var cc = c
-                        cc.clip(to: Path(rect))
-                        cc.draw(Image(nsImage: img), in: screen(geo.tileRect(z: pz, x: px, y: py)))
-                        break
-                    }
-                    pz -= 1; px /= 2; py /= 2
-                }
-            }
-        }
+        let k = size.width / geo.width * zoom
+        let c = CGPoint(x: (size.width / 2 - offset.width) / k, y: (size.height / 2 - offset.height) / k)
+        let ll = geo.unproject(c)
+        // MapLibre: 512 px world at zoom 0; ours: 256 px world → z = log2(points per 256-px world) − 1.
+        let mz = log2(geo.unitsPerWorldPixel * Double(k)) - 1
+        return (ll.lat, ll.lon, mz)
     }
 
     private func canvas(size _: CGSize) -> some View {
         let geo = GeoStore.shared
         let z = zoom, off = offset
-        let tick = tiles.tick
-        let dark = scheme == .dark
         // Basemap fades in from ×1.4 to ×3.
         let detail: Double = MapInteraction.enabled ? max(0, min(1, (Double(z) - 1.4) / 1.6)) : 0
         return Canvas { ctx, size in
-            _ = tick
             let s = size.width / geo.width
             let tf = CGAffineTransform(scaleX: s * z, y: s * z).concatenating(CGAffineTransform(translationX: off.width, y: off.height))
             let lw = s * min(2.2, pow(z, 0.25))      // line-width scale: grows gently with zoom
             func pt(_ lat: Double, _ lon: Double) -> CGPoint { geo.project(lat: lat, lon: lon).applying(tf) }
             let view = CGRect(origin: .zero, size: size).insetBy(dx: -30, dy: -30)
 
-            if detail > 0 {
-                Self.drawTiles(ctx, size: size, scale: s * z, offset: off, dark: dark, opacity: detail)
-            }
 
             var oblastLevel: [String: AlertLevel] = [:]
             if mode == .oblasts {

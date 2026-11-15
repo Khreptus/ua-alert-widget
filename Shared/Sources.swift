@@ -322,6 +322,10 @@ public final class Aggregator: @unchecked Sendable {
         if let rc = dmNR.0 { Aggregator.applyRecon(rc, to: &s) }
         // Targets: dimap first, then ukrainealarm and neptun fill the gaps
         s.targets = Aggregator.mergeTargets(Aggregator.mergeTargets(dmTR.0 ?? [], uaR.0?.targets ?? []), npR.0 ?? [], radiusKm: 15)
+        // Tactical front-line drones (FPV, Lancet, Molnia) are noise for a city widget.
+        s.targets.removeAll { t in
+            t.kind == .fpv || ["Ланцет", "Молнія"].contains { (t.model ?? "").contains($0) }
+        }
 
         s.sources = [uaR.1, SourceStatus(name: "dimap.live", ok: dmAR.1.ok || dmTR.1.ok, detail: dmAR.1.ok ? (dmTR.1.ok ? "OK" : "без цілей") : dmAR.1.detail), rrR.1, SourceStatus(name: "neptun.in.ua", ok: npR.1.ok, detail: npR.1.detail)]
         s.updated = Date()
