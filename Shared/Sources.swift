@@ -280,6 +280,17 @@ enum RadarUAClient {
 // MARK: - Aggregator
 
 public final class Aggregator: @unchecked Sendable {
+    /// Targets from the secondary services from the last full fetch (used to enrich fast dimap updates).
+    private var lastUA: [AirTarget] = []
+    private var lastNP: [AirTarget] = []
+
+    /// Fast path: only dimap targets (every ~2 s), enriched with the last known details from other services.
+    public func fetchTargets() async -> [AirTarget]? {
+        guard let dm = try? await DimapClient.targets() else { return nil }
+        var t = Aggregator.mergeTargets(Aggregator.mergeTargets(dm, lastUA, addUnmatched: false), lastNP, radiusKm: 15, addUnmatched: false)
+        t.removeAll { x in x.kind == .fpv || ["Ланцет", "Молнія"].contains { (x.model ?? "").contains($0) } }
+        return t
+    }
     public init() {}
 
     private func run<T>(_ name: String, _ op: @escaping () async throws -> T) async -> (T?, SourceStatus) {
@@ -301,6 +312,8 @@ public final class Aggregator: @unchecked Sendable {
         async let dmN = run("dimap.live стрічка") { try await DimapClient.recon() }
         async let np = run("neptun.in.ua") { try await NeptunClient.threats() }
         let (uaR, dmAR, dmTR, rrR, dmNR, npR) = await (ua, dmA, dmT, rr, dmN, np)
+        lastUA = uaR.0?.targets ?? lastUA
+        lastNP = npR.0 ?? lastNP
 
         var s = Snapshot()
         // Official first

@@ -17,6 +17,8 @@ final class AppModel: ObservableObject {
     private let siren = Siren()
     private var timer: Timer?
     private var clock: Timer?
+    private var fastTimer: Timer?
+    private var fastBusy = false
     private var refreshing = false
 
     private var lastLevel: AlertLevel?
@@ -58,6 +60,10 @@ final class AppModel: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 6, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refresh() }
         }
+        // Targets move fast: poll dimap targets alone every 2 s, independent of the slower full refresh.
+        fastTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            Task { @MainActor in await self?.refreshTargets() }
+        }
         clock = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.now = Date() }
         }
@@ -79,6 +85,16 @@ final class AppModel: ObservableObject {
         }
         now = Date()
         evaluate()
+    }
+
+    func refreshTargets() async {
+        guard !fastBusy, !refreshing, !asleep else { return }
+        fastBusy = true
+        defer { fastBusy = false }
+        guard let t = await aggregator.fetchTargets() else { return }
+        var s = snapshot
+        s.targets = TargetTracker.shared.update(t)
+        snapshot = s
     }
 
     // MARK: Дорозвідка by time: a raion stays "recon" for 15 min after its red alert ends

@@ -50,13 +50,13 @@ public final class TargetTracker: @unchecked Sendable {
                 if t.bearing == nil, moved > 1.5 { t.bearing = Geo.bearing(lat1: f.lat, lon1: f.lon, lat2: t.lat, lon2: t.lon) }
                 // Turn rate (°/min) from the change of course, smoothed.
                 var turn = f.turn
-                if let b0 = f.bearing, let b1 = t.bearing, dtMin > 0.2 {
+                if let b0 = f.bearing, let b1 = t.bearing, dtMin > 0.05 {
                     let rate = max(-20, min(20, Geo.signedAngle(from: b0, to: b1) / dtMin))
-                    turn = f.turn * 0.5 + rate * 0.5
+                    turn = f.turn * 0.3 + rate * 0.7
                 }
                 if t.turn == 0 { t.turn = turn }
                 // Keep the previous fix while the target hasn't moved (avoids zero-time deltas).
-                let keepOld = moved < 0.3 && dtMin < 3
+                let keepOld = moved < 0.15 && dtMin < 1
                 next[t.id] = keepOld ? Fix(lat: f.lat, lon: f.lon, bearing: f.bearing, time: f.time, turn: turn)
                                      : Fix(lat: t.lat, lon: t.lon, bearing: t.bearing, time: now, turn: turn)
             } else {
