@@ -8,6 +8,8 @@ public struct Hromada: Codable, Hashable, Identifiable, Sendable {
     public var oblast: String
     public var lat: Double
     public var lon: Double
+    /// Custom place name for a user-picked point (street, village); nil for the hromada itself.
+    public var label: String? = nil
 
     public var id: String { "\(name)|\(raion)" }
 
