@@ -27,7 +27,7 @@ final class NotchController: ObservableObject {
     private var hovering = false
 
     static let bigWidth: CGFloat = 460
-    static let bigBody: CGFloat = 74
+    static let bigBody: CGFloat = 72
     static let compactWing: CGFloat = 92
 
     // MARK: API
@@ -183,9 +183,13 @@ struct NotchIsland: View {
             let h = g.size.height - pad
             let big = n.expanded && n.card != nil
             ZStack(alignment: .top) {
-                UnevenRoundedRectangle(cornerRadii: .init(topLeading: 0, bottomLeading: big ? 30 : 14, bottomTrailing: big ? 30 : 14, topTrailing: 0), style: .continuous)
-                    .fill(.black)
+                let shape = UnevenRoundedRectangle(cornerRadii: .init(topLeading: 0, bottomLeading: big ? 30 : 14, bottomTrailing: big ? 30 : 14, topTrailing: 0), style: .continuous)
+                shape.fill(.black)
                     .shadow(color: .black.opacity(big ? 0.5 : 0), radius: 18, y: 8)
+                if big, let c = n.card {
+                    // Thin accent outline (per Figma).
+                    shape.strokeBorder(color(c.kind), lineWidth: 1)
+                }
                 if big, let c = n.card { expandedBody(c) } else if n.ongoingSince != nil { compactBody }
             }
             .frame(width: w, height: h)
@@ -227,7 +231,7 @@ struct NotchIsland: View {
                     Circle().fill(col.opacity(0.2))
                     switch c.kind {
                     case .alert: SirenIcon(size: 18).foregroundStyle(col)
-                    case .clear: Image(systemName: "checkmark").font(.system(size: 17, weight: .bold)).foregroundStyle(col)
+                    case .clear: DoneRing(color: col).frame(width: 24, height: 24)
                     case .recon: Image(systemName: "binoculars.fill").font(.system(size: 15, weight: .semibold)).foregroundStyle(col)
                     case .threat: TargetIcon(kind: c.target ?? .shahed, size: 18)
                     }
@@ -254,6 +258,23 @@ struct NotchIsland: View {
             .padding(.horizontal, 16)
             .frame(maxHeight: .infinity)
             Capsule().fill(col).frame(width: 60, height: 3).padding(.bottom, 6)
+        }
+    }
+}
+
+/// Duotone "done" ring from the Figma mockup.
+struct DoneRing: View {
+    let color: Color
+    var body: some View {
+        Canvas { ctx, size in
+            let r = CGRect(origin: .zero, size: size).insetBy(dx: size.width * 0.125, dy: size.height * 0.125)
+            ctx.fill(Path(ellipseIn: r), with: .color(Color(hex: 0x7E869E).opacity(0.25)))
+            ctx.stroke(Path(ellipseIn: r), with: .color(color), lineWidth: 1.4)
+            var p = Path()
+            p.move(to: CGPoint(x: size.width * 0.34, y: size.height * 0.5))
+            p.addLine(to: CGPoint(x: size.width * 0.45, y: size.height * 0.62))
+            p.addLine(to: CGPoint(x: size.width * 0.68, y: size.height * 0.38))
+            ctx.stroke(p, with: .color(color), style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
         }
     }
 }
