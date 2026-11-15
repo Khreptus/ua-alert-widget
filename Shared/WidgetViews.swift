@@ -81,6 +81,7 @@ struct StateText {
     static func subtitle(_ s: CityStatus?, now: Date) -> String {
         guard let s else { return "" }
         if s.level == .alert, let d = Fmt.duration(since: s.since, now: now), let since = s.since { return "з \(Fmt.time(since)) · \(d)" }
+        if s.highThreat, let e = s.etaMinutes { return "\(s.etaKind?.title ?? "Ціль") · підліт ~\(Fmt.eta(e))" }
         if let km = s.nearestKm, km < 150, s.highThreat { return "\(s.nearestKind?.title ?? "Ціль") за \(Int(km)) км" }
         switch s.level {
         case .threat: return "Дрони / ракети"
@@ -108,12 +109,12 @@ struct LegendView: View {
     let showTargets: Bool
     var body: some View {
         HStack(spacing: 10) {
-            item(Theme.red, "Тривога")
-            item(Theme.amber, "Загроза")
+            item(Theme.mapRed, "Тривога")
+            item(Theme.mapAmber, "Загроза")
             HStack(spacing: 4) { StripedSwatch(); Text("Дорозвідка").font(.system(size: 11)).foregroundStyle(Theme.secondary) }
             if showTargets {
                 HStack(spacing: 4) {
-                    TargetGlyph.path(.drone, size: 8).offsetBy(dx: 4, dy: 4).fill(Theme.text).frame(width: 8, height: 8)
+                    TargetIcon(kind: .shahed, size: 10)
                     Text("Ціль").font(.system(size: 11)).foregroundStyle(Theme.secondary)
                 }
             }

@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
+        MapInteraction.enabled = true
         NSApp.setActivationPolicy(.accessory)
         // Make sure LaunchServices knows this bundle (and its widget extension) so the widget shows up in the gallery.
         LSRegisterURL(Bundle.main.bundleURL as CFURL, true)

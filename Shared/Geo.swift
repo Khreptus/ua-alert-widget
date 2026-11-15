@@ -165,6 +165,15 @@ public enum Geo {
         return (b + 360).truncatingRemainder(dividingBy: 360)
     }
 
+    /// Point at `km` along `bearing` (degrees) from `p`.
+    public static func destination(_ p: Projection.LL, km: Double, bearing: Double) -> Projection.LL {
+        let r = 6371.0, δ = km / r, θ = bearing * .pi / 180
+        let φ1 = p.lat * .pi / 180, λ1 = p.lon * .pi / 180
+        let φ2 = asin(sin(φ1) * cos(δ) + cos(φ1) * sin(δ) * cos(θ))
+        let λ2 = λ1 + atan2(sin(θ) * sin(δ) * cos(φ1), cos(δ) - sin(φ1) * sin(φ2))
+        return Projection.LL(lat: φ2 * 180 / .pi, lon: λ2 * 180 / .pi)
+    }
+
     public static func angleDiff(_ a: Double, _ b: Double) -> Double {
         let d = abs(a - b).truncatingRemainder(dividingBy: 360)
         return d > 180 ? 360 - d : d

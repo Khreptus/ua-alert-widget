@@ -77,7 +77,7 @@ struct WidgetSettingsPopover: View {
                         }
                     }
                 }.buttonStyle(.plain)
-                toggleRow("Повітряні цілі", "dimap.live + ukrainealarm", $prefs.showTargets)
+                toggleRow("Повітряні цілі", "dimap · neptun · ukrainealarm", $prefs.showTargets)
                 toggleRow("Сирена — тривога", "Масштабна (червона)", $prefs.sirenOnAlert)
                 toggleRow("Сирена — загроза", "Дрони / ракети (жовта)", $prefs.sirenOnThreat)
                 toggleRow("Загроза і дорозвідка", "Жовтим і смугами на карті", $prefs.showThreat)
@@ -144,6 +144,7 @@ struct SourcesList: View {
         switch n {
         case "ukrainealarm": return "тривоги · цілі"
         case "dimap.live": return "загрози · цілі"
+        case "neptun.in.ua": return "цілі (додатково)"
         default: return "тривоги (резерв)"
         }
     }
@@ -189,7 +190,7 @@ struct SettingsView: View {
                 }
                 Section("Карта") {
                     Picker("Деталізація", selection: $prefs.mapMode) { ForEach(MapMode.allCases) { Text($0.title).tag($0) } }
-                    Toggle("Повітряні цілі (dimap.live + ukrainealarm)", isOn: $prefs.showTargets)
+                    Toggle("Повітряні цілі (dimap, neptun, ukrainealarm)", isOn: $prefs.showTargets)
                     Toggle("Зони загрози (жовтим)", isOn: $prefs.showThreat)
                 }
                 Section("Система") {

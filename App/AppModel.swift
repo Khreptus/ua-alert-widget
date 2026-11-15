@@ -145,9 +145,9 @@ final class AppModel: ObservableObject {
             }
             reloadWidgets(force: true)
         } else if st.highThreat && !lastHigh {
-            let dist = st.nearestKm.map { " · \(Int($0)) км" } ?? ""
+            let dist = st.etaMinutes.map { " · підліт ~\(Fmt.eta($0))" } ?? (st.nearestKm.map { " · \(Int($0)) км" } ?? "")
             // Only a quiet banner: the siren sounds only when the raion is painted on the map.
-            notify(title: "Ціль рухається в бік міста — \(city.displayName)", body: "\(st.nearestKind?.title ?? "Ціль")\(dist)", silent: true)
+            notify(title: "Ціль рухається в бік міста — \(city.displayName)", body: "\((st.etaKind ?? st.nearestKind)?.title ?? "Ціль")\(dist)", silent: true)
         }
         reloadWidgets(force: false)
     }

@@ -185,7 +185,7 @@ struct DesktopWidgetRoot: View {
 final class DraggableHostingView<Content: View>: NSHostingView<Content> {
     private var area: NSTrackingArea?
 
-    override var mouseDownCanMoveWindow: Bool { true }
+    override var mouseDownCanMoveWindow: Bool { !MapInteraction.blockWindowDrag }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func updateTrackingAreas() {
@@ -216,6 +216,7 @@ enum WindowDragGesture {
     static func make() -> some Gesture {
         DragGesture(minimumDistance: 3, coordinateSpace: .global)
             .onChanged { _ in
+                if MapInteraction.blockWindowDrag && window == nil { return }
                 let mouse = NSEvent.mouseLocation
                 if window == nil {
                     window = NSApp.windows.first { $0 is DesktopPanel && $0.frame.contains(mouse) } ?? NSApp.windows.first { $0 is DesktopPanel }

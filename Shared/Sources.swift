@@ -198,14 +198,47 @@ enum DimapClient {
         let list: [JSON] = ((root as? JSON)?["targets"] as? [JSON]) ?? (root as? [JSON]) ?? []
         return list.compactMap { t in
             guard let lat = t.num("lat", "latitude"), let lon = t.num("lng", "lon", "longitude") else { return nil }
-            return AirTarget(
+            let type = t.str("type", "kind")
+            var a = AirTarget(
                 id: "dm-" + (t.str("id") ?? "\(lat),\(lon)"),
-                kind: TargetKind.from(t.str("type", "kind")),
+                kind: TargetKind.from(type),
                 lat: lat, lon: lon,
                 bearing: t.num("bearing", "course", "direction"),
                 speed: t.num("speed"),
                 lastSeen: t.date("lastSeen", "updatedAt") ?? Date(),
                 sources: ["dimap"])
+            a.model = TargetModel.name(type)
+            a.turn = t.num("_turn", "turn") ?? 0
+            a.count = Int(t.num("count") ?? 1)
+            return a
+        }
+    }
+}
+
+// MARK: - neptun.in.ua (extra target source; dimap has priority)
+
+enum NeptunClient {
+    static let site = "https://neptun.in.ua"
+
+    static func threats() async throws -> [AirTarget] {
+        guard let root = try await Net.json(site + "/api/v1/threats", site: site) as? JSON else { throw NetError.badJSON }
+        return ((root["threats"] as? [JSON]) ?? []).compactMap { t in
+            guard (t.str("status") ?? "active") == "active",
+                  let lat = t.num("lat", "latitude"), let lon = t.num("lon", "lng", "longitude") else { return nil }
+            let type = t.str("type") ?? ""
+            let title = t.str("title")
+            var kind = TargetKind.from(type)
+            if kind == .unknown { kind = TargetKind.from(title) }
+            var a = AirTarget(
+                id: "np-" + (t.str("id") ?? "\(lat),\(lon)"),
+                kind: kind, lat: lat, lon: lon,
+                bearing: t.num("heading", "course", "bearing"),
+                speed: t.num("speed", "speedKmh"),
+                lastSeen: t.date("updatedAt", "lastSeenAt") ?? Date(),
+                sources: ["neptun"])
+            if let title, TargetKind.from(title) != .unknown, title.count > 4, title != "БпЛА" { a.model = title }
+            a.count = max(1, Int(t.num("count") ?? 1))
+            return a
         }
     }
 }
@@ -266,7 +299,8 @@ public final class Aggregator: @unchecked Sendable {
         async let dmT = run("dimap.live цілі") { try await DimapClient.targets() }
         async let rr = run("radarua.com") { try await RadarUAClient.alerts() }
         async let dmN = run("dimap.live стрічка") { try await DimapClient.recon() }
-        let (uaR, dmAR, dmTR, rrR, dmNR) = await (ua, dmA, dmT, rr, dmN)
+        async let np = run("neptun.in.ua") { try await NeptunClient.threats() }
+        let (uaR, dmAR, dmTR, rrR, dmNR, npR) = await (ua, dmA, dmT, rr, dmN, np)
 
         var s = Snapshot()
         // Official first
@@ -286,10 +320,10 @@ public final class Aggregator: @unchecked Sendable {
         }
         // Дорозвідка from the news feed: only where there is no active alert/threat
         if let rc = dmNR.0 { Aggregator.applyRecon(rc, to: &s) }
-        // Targets: ONLY dimap + ukrainealarm
-        s.targets = Aggregator.mergeTargets(dmTR.0 ?? [], uaR.0?.targets ?? [])
+        // Targets: dimap first, then ukrainealarm and neptun fill the gaps
+        s.targets = Aggregator.mergeTargets(Aggregator.mergeTargets(dmTR.0 ?? [], uaR.0?.targets ?? []), npR.0 ?? [], radiusKm: 15)
 
-        s.sources = [uaR.1, SourceStatus(name: "dimap.live", ok: dmAR.1.ok || dmTR.1.ok, detail: dmAR.1.ok ? (dmTR.1.ok ? "OK" : "без цілей") : dmAR.1.detail), rrR.1]
+        s.sources = [uaR.1, SourceStatus(name: "dimap.live", ok: dmAR.1.ok || dmTR.1.ok, detail: dmAR.1.ok ? (dmTR.1.ok ? "OK" : "без цілей") : dmAR.1.detail), rrR.1, SourceStatus(name: "neptun.in.ua", ok: npR.1.ok, detail: npR.1.detail)]
         s.updated = Date()
         return s
     }
@@ -305,16 +339,18 @@ public final class Aggregator: @unchecked Sendable {
         for c in rc.cities where (s.cities[c]?.level ?? .none) < .recon { s.cities[c] = recon }
     }
 
-    static func mergeTargets(_ a: [AirTarget], _ b: [AirTarget]) -> [AirTarget] {
+    static func mergeTargets(_ a: [AirTarget], _ b: [AirTarget], radiusKm: Double = 10) -> [AirTarget] {
         let now = Date()
         var out = a.filter { now.timeIntervalSince($0.lastSeen) < 300 }
         for t in b where now.timeIntervalSince(t.lastSeen) < 300 {
             if let i = out.firstIndex(where: { o in
-                Geo.distanceKm(lat1: o.lat, lon1: o.lon, lat2: t.lat, lon2: t.lon) < 10 &&
+                Geo.distanceKm(lat1: o.lat, lon1: o.lon, lat2: t.lat, lon2: t.lon) < radiusKm &&
                 (o.bearing == nil || t.bearing == nil || Geo.angleDiff(o.bearing!, t.bearing!) < 30)
             }) {
                 out[i].sources = Array(Set(out[i].sources + t.sources)).sorted()
                 if out[i].bearing == nil { out[i].bearing = t.bearing }
+                if out[i].model == nil { out[i].model = t.model }
+                if out[i].kind == .unknown { out[i].kind = t.kind }
                 if t.lastSeen > out[i].lastSeen { out[i].lastSeen = t.lastSeen }
             } else {
                 out.append(t)
