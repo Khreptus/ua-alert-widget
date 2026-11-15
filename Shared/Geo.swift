@@ -50,7 +50,7 @@ public struct RaionShape: Sendable {
 }
 
 private struct GeoFile: Decodable {
-    struct Proj: Decodable { let k: Double; let minx: Double; let miny: Double; let scale: Double }
+    struct Proj: Decodable { let g: Double; let ox: Double; let oy: Double }
     struct R: Decodable { let name: String; let oblast: String; let rings: [[Double]] }
     struct O: Decodable { let name: String; let rings: [[Double]] }
     let width: Double
@@ -70,7 +70,10 @@ public final class GeoStore: @unchecked Sendable {
     public let oblastBorders: Path
     public let oblastShapes: [String: Path]
     public let hromadas: [Hromada]
-    private let proj: (k: Double, minx: Double, miny: Double, s: Double)
+    /// Web-Mercator: map unit = world-pixel(zoom 0, 256 px) × g − offset.
+    private let proj: (g: Double, ox: Double, oy: Double)
+    /// Map units per zoom-0 world pixel (used to pick raster tile zoom).
+    public var unitsPerWorldPixel: Double { proj.g }
     private let keyCounts: [String: Int]
     private let byID: [String: Hromada]
 
@@ -80,12 +83,12 @@ public final class GeoStore: @unchecked Sendable {
         var rs: [RaionShape] = []
         var borders = Path()
         var obl: [String: Path] = [:]
-        var p = (k: 0.66262, minx: 14.6684, miny: -52.3795, s: 56.7285)
+        var p = (g: 52.86014132521543, ox: 7598.214709740463, oy: 4446.620731212759)
         if let url = bundle.url(forResource: "geo", withExtension: "json"),
            let data = try? Data(contentsOf: url),
            let g = try? JSONDecoder().decode(GeoFile.self, from: data) {
             w = g.width; h = g.height
-            p = (g.proj.k, g.proj.minx, g.proj.miny, g.proj.scale)
+            p = (g.proj.g, g.proj.ox, g.proj.oy)
             rs = g.raions.map { RaionShape(name: $0.name, oblast: $0.oblast, path: GeoStore.path($0.rings)) }
             for o in g.oblasts {
                 let path = GeoStore.path(o.rings)
@@ -120,7 +123,21 @@ public final class GeoStore: @unchecked Sendable {
     }
 
     public func project(lat: Double, lon: Double) -> CGPoint {
-        CGPoint(x: (lon * proj.k - proj.minx) * proj.s, y: (-lat - proj.miny) * proj.s)
+        let x = (lon + 180) / 360 * 256
+        let r = max(-85, min(85, lat)) * .pi / 180
+        let y = (1 - log(tan(r) + 1 / cos(r)) / .pi) / 2 * 256
+        return CGPoint(x: x * proj.g - proj.ox, y: y * proj.g - proj.oy)
+    }
+
+    /// Map-space rectangle of a slippy-map tile.
+    public func tileRect(z: Int, x: Int, y: Int) -> CGRect {
+        let w = 256 / pow(2, Double(z))
+        return CGRect(x: Double(x) * w * proj.g - proj.ox, y: Double(y) * w * proj.g - proj.oy, width: w * proj.g, height: w * proj.g)
+    }
+
+    /// Map-space point → zoom-0 world pixel.
+    public func world(_ p: CGPoint) -> CGPoint {
+        CGPoint(x: (p.x + proj.ox) / proj.g, y: (p.y + proj.oy) / proj.g)
     }
 
     public func isUniqueHromadaKey(_ key: String) -> Bool { (keyCounts[key] ?? 0) == 1 }

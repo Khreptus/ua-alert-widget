@@ -68,8 +68,11 @@ public struct UAMapView: View {
     @State private var zoom: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var dragStart: CGSize? = nil
+    @ObservedObject private var tiles = TileStore.shared
+    @Environment(\.colorScheme) private var scheme
 
-    static let maxZoom: CGFloat = 8
+    /// Up to street level (raster tile zoom ≈ 15).
+    static let maxZoom: CGFloat = 900
 
     public init(snapshot: Snapshot, city: Hromada?, showTargets: Bool = true, showThreat: Bool = true, mode: MapMode = .raions, pinColor: Color = Theme.blue) {
         self.snapshot = snapshot; self.city = city; self.showTargets = showTargets; self.showThreat = showThreat; self.mode = mode; self.pinColor = pinColor
@@ -81,6 +84,15 @@ public struct UAMapView: View {
             let size = gp.size
             ZStack(alignment: .topTrailing) {
                 canvas(size: size)
+                if MapInteraction.enabled && zoom > 1.6 {
+                    Text("© OpenStreetMap · © CARTO")
+                        .font(.system(size: 7.5)).foregroundStyle(.white.opacity(0.55))
+                        .padding(.horizontal, 4).padding(.vertical, 1.5)
+                        .background(Capsule().fill(.black.opacity(0.35)))
+                        .padding(4)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                        .allowsHitTesting(false)
+                }
                 if MapInteraction.enabled {
                     MapEventCatcher(
                         onScroll: { e, loc in handleScroll(e, at: CGPoint(x: loc.x * size.width, y: loc.y * size.height), size: size) },
@@ -139,8 +151,10 @@ public struct UAMapView: View {
             offset = clamp(CGSize(width: offset.width + e.scrollingDeltaX, height: offset.height + e.scrollingDeltaY), zoom: zoom, size: size)
         } else {
             // Mouse wheel (or ⌘/⌥ + trackpad scroll): zoom around the pointer.
-            let d = e.hasPreciseScrollingDeltas ? e.scrollingDeltaY / 120 : e.scrollingDeltaY / 8
-            applyZoom(by: pow(1.6, max(-1, min(1, d))), at: p, size: size)
+            let f: CGFloat = e.hasPreciseScrollingDeltas
+                ? pow(1.015, max(-40, min(40, e.scrollingDeltaY)))
+                : pow(1.4, max(-3, min(3, e.scrollingDeltaY)))
+            applyZoom(by: f, at: p, size: size)
         }
     }
 
@@ -156,15 +170,66 @@ public struct UAMapView: View {
 
     // MARK: drawing
 
+    /// Raster basemap; missing tiles fall back to a scaled-up parent tile.
+    static func drawTiles(_ ctx: GraphicsContext, size: CGSize, scale k: CGFloat, offset off: CGSize, dark: Bool, opacity: Double) {
+        let geo = GeoStore.shared
+        let store = TileStore.shared
+        let ppw = geo.unitsPerWorldPixel * Double(k)          // screen points per zoom-0 world pixel
+        let tz = max(3, min(17, Int(log2(ppw).rounded())))
+        let n = 1 << tz
+        let a = geo.world(CGPoint(x: -off.width / k, y: -off.height / k))
+        let b = geo.world(CGPoint(x: (size.width - off.width) / k, y: (size.height - off.height) / k))
+        let w = 256 / Double(n)
+        let x0 = max(0, Int(floor(a.x / w))), x1 = min(n - 1, Int(floor(b.x / w)))
+        let y0 = max(0, Int(floor(a.y / w))), y1 = min(n - 1, Int(floor(b.y / w)))
+        guard x1 >= x0, y1 >= y0, (x1 - x0 + 1) * (y1 - y0 + 1) <= 64 else { return }
+        func screen(_ r: CGRect) -> CGRect {
+            CGRect(x: r.minX * k + off.width, y: r.minY * k + off.height, width: r.width * k, height: r.height * k)
+        }
+        store.beginFrame()
+        var c = ctx
+        c.opacity = opacity
+        c.fill(Path(CGRect(origin: .zero, size: size)), with: .color(dark ? Color(hex: 0x0E0E10) : Color(hex: 0xF2F2F2)))
+        for y in y0...y1 {
+            for x in x0...x1 {
+                let rect = screen(geo.tileRect(z: tz, x: x, y: y)).insetBy(dx: -0.25, dy: -0.25)
+                if let img = store.request(.init(z: tz, x: x, y: y, dark: dark)) {
+                    c.draw(Image(nsImage: img), in: rect)
+                    continue
+                }
+                // Fallback: nearest cached ancestor, clipped to this tile.
+                var pz = tz - 1, px = x / 2, py = y / 2
+                while pz >= max(0, tz - 5) {
+                    if let img = store.image(.init(z: pz, x: px, y: py, dark: dark)) {
+                        var cc = c
+                        cc.clip(to: Path(rect))
+                        cc.draw(Image(nsImage: img), in: screen(geo.tileRect(z: pz, x: px, y: py)))
+                        break
+                    }
+                    pz -= 1; px /= 2; py /= 2
+                }
+            }
+        }
+    }
+
     private func canvas(size _: CGSize) -> some View {
         let geo = GeoStore.shared
         let z = zoom, off = offset
+        let tick = tiles.tick
+        let dark = scheme == .dark
+        // Basemap fades in from ×1.4 to ×3.
+        let detail: Double = MapInteraction.enabled ? max(0, min(1, (Double(z) - 1.4) / 1.6)) : 0
         return Canvas { ctx, size in
+            _ = tick
             let s = size.width / geo.width
             let tf = CGAffineTransform(scaleX: s * z, y: s * z).concatenating(CGAffineTransform(translationX: off.width, y: off.height))
-            let lw = s * min(2.2, sqrt(z))      // line-width scale: grows gently with zoom
+            let lw = s * min(2.2, pow(z, 0.25))      // line-width scale: grows gently with zoom
             func pt(_ lat: Double, _ lon: Double) -> CGPoint { geo.project(lat: lat, lon: lon).applying(tf) }
             let view = CGRect(origin: .zero, size: size).insetBy(dx: -30, dy: -30)
+
+            if detail > 0 {
+                Self.drawTiles(ctx, size: size, scale: s * z, offset: off, dark: dark, opacity: detail)
+            }
 
             var oblastLevel: [String: AlertLevel] = [:]
             if mode == .oblasts {
@@ -177,9 +242,10 @@ public struct UAMapView: View {
                 let p = r.path.applying(tf)
                 guard p.boundingRect.intersects(view) else { continue }
                 let level = mode == .raions ? snapshot.raionState(r.name, oblast: r.oblast).level : (oblastLevel[r.oblast] ?? .none)
-                ctx.fill(p, with: .color(Theme.color(level, showThreat: showThreat)))
-                if level == .recon && showThreat { Stripes.draw(in: ctx, path: p, scale: lw) }
-                if mode == .raions { ctx.stroke(p, with: .color(Theme.raionBorder), lineWidth: max(0.35, 0.8 * lw)) }
+                let fillOpacity = level == .none || (!showThreat && level < .alert) ? 1 - detail : 1 - 0.58 * detail
+                if fillOpacity > 0.01 { ctx.fill(p, with: .color(Theme.color(level, showThreat: showThreat).opacity(fillOpacity))) }
+                if level == .recon && showThreat { var c = ctx; c.opacity = 1 - 0.5 * detail; Stripes.draw(in: c, path: p, scale: lw) }
+                if mode == .raions { ctx.stroke(p, with: .color(Theme.raionBorder.opacity(1 - 0.6 * detail)), lineWidth: max(0.35, 0.8 * lw)) }
             }
             ctx.stroke(geo.oblastBorders.applying(tf), with: .color(Theme.oblastBorder), style: StrokeStyle(lineWidth: max(0.7, 1.6 * lw), lineJoin: .round))
 
