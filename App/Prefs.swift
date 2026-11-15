@@ -44,6 +44,8 @@ final class Prefs: ObservableObject {
     @Published var widgetScale: Double { didSet { d.set(widgetScale, forKey: "widgetScale") } }
     @Published var widgetOnTop: Bool { didSet { d.set(widgetOnTop, forKey: "widgetOnTop") } }
     @Published var compactMode: Bool { didSet { d.set(compactMode, forKey: "compactMode") } }
+    @Published var notchNotifications: Bool { didSet { d.set(notchNotifications, forKey: "notchNotifications") } }
+    @Published var sidePanelEdge: Bool { didSet { d.set(sidePanelEdge, forKey: "sidePanelEdge") } }
 
     private init() {
         d.register(defaults: [
@@ -51,7 +53,7 @@ final class Prefs: ObservableObject {
             "showTargets": true, "showThreat": true, "mapMode": MapMode.raions.rawValue,
             "sirenOnAlert": true, "sirenOnHighThreat": true, "bannerOnThreat": true, "sirenOnThreat": false, "notifyRecon": true, "chimeOnClear": true,
             "volume": 0.8, "sirenSeconds": 30.0,
-            "showDesktopWidget": true, "widgetSize": WidgetSize.large.rawValue, "widgetScale": 1.0, "widgetOnTop": false, "compactMode": true,
+            "showDesktopWidget": true, "widgetSize": WidgetSize.large.rawValue, "widgetScale": 1.0, "widgetOnTop": false, "compactMode": true, "notchNotifications": true, "sidePanelEdge": true,
         ])
         cityID = d.string(forKey: "cityID") ?? ""
         customPoint = d.data(forKey: "customPoint").flatMap { try? JSONDecoder().decode(CustomPoint.self, from: $0) }
@@ -71,6 +73,8 @@ final class Prefs: ObservableObject {
         widgetScale = d.double(forKey: "widgetScale")
         widgetOnTop = d.bool(forKey: "widgetOnTop")
         compactMode = d.bool(forKey: "compactMode")
+        notchNotifications = d.bool(forKey: "notchNotifications")
+        sidePanelEdge = d.bool(forKey: "sidePanelEdge")
     }
 
     var city: Hromada? {

@@ -104,6 +104,8 @@ final class AppModel: ObservableObject {
     /// Compare city status with the previous one → siren / notifications.
     private func evaluate() {
         guard let city, let st = status else { return }
+        AlertHistory.shared.update(cityID: city.id, level: st.level, since: st.since)
+        NotchController.shared.setOngoing(st.level == .alert ? (st.since ?? Date()) : nil)
         if city.id != lastCityID {
             // City changed: just remember state, no siren.
             lastCityID = city.id; lastLevel = st.level; lastHigh = st.highThreat
@@ -125,6 +127,7 @@ final class AppModel: ObservableObject {
 
         if st.level == .alert && prev != .alert {
             notify(title: "🔴 Повітряна тривога — \(city.displayName)", body: "\(city.raion) · \(Fmt.time(Date())). Пройдіть в укриття.")
+            NotchController.shared.show(.init(kind: .alert, title: "Повітряна тривога", subtitle: "\(city.displayName) · з \(Fmt.time(st.since ?? Date()))"), seconds: 12)
             if prefs.sirenOnAlert { playSiren() }
             reloadWidgets(force: true)
         } else if st.level == .threat && prev < .threat {
@@ -132,15 +135,19 @@ final class AppModel: ObservableObject {
             if prefs.bannerOnThreat || prefs.sirenOnThreat {
                 notify(title: "🟡 Загроза дронів / ракет — \(city.displayName)", body: city.raion, silent: !prefs.sirenOnThreat)
             }
+            NotchController.shared.show(.init(kind: .threat, title: "Загроза дронів / ракет", subtitle: "\(city.displayName) · \(city.raion)", target: st.etaKind ?? st.nearestKind))
             reloadWidgets(force: true)
         } else if st.level == .recon && prev > .recon {
             stopSiren()
             if prefs.notifyRecon { notify(title: "Дорозвідка — \(city.displayName)", body: "Тривогу знято, триває дорозвідка. Не поспішайте виходити з укриття.", silent: true) }
+            NotchController.shared.show(.init(kind: .recon, title: "Дорозвідка", subtitle: "Не поспішайте виходити з укриття"))
             reloadWidgets(force: true)
         } else if st.level == .none && prev != .none {
             stopSiren()
             if prev >= .threat || prev == .recon {
                 notify(title: "Відбій — \(city.displayName)", body: city.raion, silent: true)
+                let lasted = AlertHistory.shared.byCity[city.id]?.last.flatMap { e in e.end.map { $0.timeIntervalSince(e.start) } }
+                NotchController.shared.show(.init(kind: .clear, title: "Відбій тривоги", subtitle: city.displayName + (lasted.map { " · тривала \(AlertHistory.duration($0))" } ?? "")))
                 if prefs.chimeOnClear { siren.play(.chime, seconds: 1, volume: prefs.volume * 0.7) }
             }
             reloadWidgets(force: true)
@@ -148,6 +155,10 @@ final class AppModel: ObservableObject {
             let dist = st.etaMinutes.map { " · підліт ~\(Fmt.eta($0))" } ?? (st.nearestKm.map { " · \(Int($0)) км" } ?? "")
             // Only a quiet banner: the siren sounds only when the raion is painted on the map.
             notify(title: "Ціль рухається в бік міста — \(city.displayName)", body: "\((st.etaKind ?? st.nearestKind)?.title ?? "Ціль")\(dist)", silent: true)
+            let k = st.etaKind ?? st.nearestKind
+            NotchController.shared.show(.init(kind: .threat, title: "\(k?.title ?? "Ціль") летить на місто",
+                                              subtitle: (st.nearestKm.map { "\(Int($0)) км · " } ?? "") + "курс на \(city.displayName)",
+                                              eta: st.etaMinutes.map { Fmt.eta($0) }, target: k))
         }
         reloadWidgets(force: false)
     }

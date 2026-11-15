@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LSRegisterURL(Bundle.main.bundleURL as CFURL, true)
         WidgetCenter.shared.reloadAllTimelines()
         AppModel.shared.start()
+        SidePanelController.shared.start()
         desktop.setup()
         statusBar.setup()
     }
@@ -101,6 +102,10 @@ struct MenuBarContent: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 4)
+            Button { AppDelegate.shared?.closeMenu(); SidePanelController.shared.show() } label: {
+                Label("Відкрити бічну панель", systemImage: "sidebar.right").frame(maxWidth: .infinity)
+            }
+            .controlSize(.large)
             Divider()
             HStack {
                 Toggle("Віджет на столі", isOn: $prefs.showDesktopWidget).toggleStyle(.switch).controlSize(.small)
