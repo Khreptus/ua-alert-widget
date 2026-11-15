@@ -30,7 +30,8 @@ jobs:
             SYMROOT="$PWD/build" \
             CODE_SIGN_IDENTITY="-" CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="" \
             build 2>&1 | tee build.log | grep -E "error:|warning: unre|BUILD (SUCCEEDED|FAILED)" || true
-          test -d "build/Release/UA Alert.app"
+          if grep -q "BUILD FAILED" build.log; then exit 1; fi
+          test -x "build/Release/UA Alert.app/Contents/MacOS/UA Alert"
 
       - name: Show errors
         if: failure()

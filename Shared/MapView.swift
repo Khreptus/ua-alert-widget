@@ -192,7 +192,7 @@ public struct UAMapView: View {
         c.fill(Path(CGRect(origin: .zero, size: size)), with: .color(dark ? Color(hex: 0x16171A) : Color(hex: 0xF2EFE9)))
         if dark {
             // Night style from the standard OSM palette: invert, swap hues back, mute.
-            c.addFilter(.colorInvert)
+            c.addFilter(.colorInvert())
             c.addFilter(.hueRotation(.degrees(180)))
             c.addFilter(.saturation(0.55))
             c.addFilter(.brightness(-0.06))
