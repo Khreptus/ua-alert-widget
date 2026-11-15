@@ -40,9 +40,18 @@ final class NotchController: ObservableObject {
         scheduleCollapse(after: seconds)
     }
 
+    private var rawOngoing: Date?
+
     func setOngoing(_ since: Date?) {
-        guard ongoingSince != since else { return }
-        ongoingSince = Prefs.shared.notchNotifications ? since : nil
+        rawOngoing = since
+        refreshOngoing()
+    }
+
+    /// The persistent "Тривога · timer" strip is optional (off by default): only pop-up notifications otherwise.
+    func refreshOngoing() {
+        let v = Prefs.shared.notchNotifications && Prefs.shared.notchOngoing ? rawOngoing : nil
+        guard ongoingSince != v else { return }
+        ongoingSince = v
         if !expanded { layout(animated: true) }
     }
 

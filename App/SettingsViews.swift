@@ -154,6 +154,7 @@ struct WidgetSettingsPopover: View {
                 }
                 toggleRow("Компактний рядок", "Наведіть — розгорнеться, клік — закріпити", $prefs.compactMode)
                 toggleRow("Сповіщення біля нотча", "Тривога, загроза, відбій — у стилі Dynamic Island", $prefs.notchNotifications)
+                toggleRow("Рядок тривоги в нотчі", "Постійно: «Тривога» і таймер, поки триває", $prefs.notchOngoing)
                 toggleRow("Бічна панель від краю", "Доведіть курсор до правого краю екрана", $prefs.sidePanelEdge)
                 row("Розмір") {
                     Picker("", selection: $prefs.widgetSize) { ForEach(WidgetSize.allCases) { Text($0.title).tag($0) } }
