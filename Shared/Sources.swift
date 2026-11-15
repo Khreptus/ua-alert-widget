@@ -208,7 +208,8 @@ enum DimapClient {
                 lastSeen: t.date("lastSeen", "updatedAt") ?? Date(),
                 sources: ["dimap"])
             a.model = TargetModel.name(type)
-            a.turn = t.num("_turn", "turn") ?? 0
+            if let tr = t.num("_turn", "turn") { a.turn = tr; a.turnKnown = true }
+            a.altitude = t.num("altitude")
             a.count = Int(t.num("count") ?? 1)
             return a
         }

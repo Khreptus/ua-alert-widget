@@ -100,6 +100,9 @@ public struct AirTarget: Identifiable, Codable, Hashable, Sendable {
     public var model: String? = nil
     /// Turn rate, degrees per minute (dimap `_turn`).
     public var turn: Double = 0
+    /// The source sent its own turn rate (dimap `_turn`): use it as is, even when 0.
+    public var turnKnown = false
+    public var altitude: Double? = nil
     /// Group size ("×3").
     public var count: Int = 1
 

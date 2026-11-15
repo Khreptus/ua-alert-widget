@@ -8,7 +8,7 @@ public enum WidgetSize: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .small: return CGSize(width: 170, height: 170)
         case .medium: return CGSize(width: 364, height: 170)
-        case .large: return CGSize(width: 364, height: 382)
+        case .large: return CGSize(width: 364, height: 492)
         }
     }
 }
@@ -274,7 +274,9 @@ struct LargeView: View {
                     if let more { more }
                 }
             }
-            UAMapView(snapshot: m.snapshot, city: m.city, showTargets: m.showTargets, showThreat: m.showThreat, mode: m.mode, pinColor: m.isAlarm ? Theme.red : Theme.blue)
+            UAMapView(snapshot: m.snapshot, city: m.city, showTargets: m.showTargets, showThreat: m.showThreat, mode: m.mode, pinColor: m.isAlarm ? Theme.red : Theme.blue,
+                      square: MapInteraction.enabled)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .frame(maxWidth: .infinity)
             Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
             CityRow(m: m)

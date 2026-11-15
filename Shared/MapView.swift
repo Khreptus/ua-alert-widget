@@ -68,7 +68,10 @@ public struct UAMapView: View {
     var onPick: ((Double, Double) -> Void)? = nil
     /// Initial view: centre (lat, lon) and zoom.
     var focus: (lat: Double, lon: Double, zoom: CGFloat)? = nil
+    /// Square frame; the map fills it (cropped at the sides, pan to see them).
+    var square: Bool = false
 
+    @State private var selected: String? = nil
     @State private var didFocus = false
     @State private var zoom: CGFloat = 1
     @State private var offset: CGSize = .zero
@@ -79,7 +82,8 @@ public struct UAMapView: View {
     static let maxZoom: CGFloat = 900
 
     public init(snapshot: Snapshot, city: Hromada?, showTargets: Bool = true, showThreat: Bool = true, mode: MapMode = .raions, pinColor: Color = Theme.blue,
-                onPick: ((Double, Double) -> Void)? = nil, focus: (lat: Double, lon: Double, zoom: CGFloat)? = nil) {
+                onPick: ((Double, Double) -> Void)? = nil, focus: (lat: Double, lon: Double, zoom: CGFloat)? = nil, square: Bool = false) {
+        self.square = square
         self.snapshot = snapshot; self.city = city; self.showTargets = showTargets; self.showThreat = showThreat; self.mode = mode; self.pinColor = pinColor
         self.onPick = onPick; self.focus = focus
     }
@@ -96,6 +100,15 @@ public struct UAMapView: View {
                         .allowsHitTesting(false)
                 }
                 canvas(size: size)
+                if let sel = selected, let t = snapshot.targets.first(where: { $0.id == sel }) {
+                    let k = baseScale(size) * zoom
+                    let p = GeoStore.shared.project(lat: t.lat, lon: t.lon)
+                    let sp = CGPoint(x: p.x * k + offset.width, y: p.y * k + offset.height)
+                    TargetInfoCard(t: t, city: city) { withAnimation(.snappy(duration: 0.2)) { selected = nil } }
+                        .fixedSize()
+                        .position(x: min(max(sp.x, 120), size.width - 120), y: sp.y > size.height / 2 ? sp.y - 90 : sp.y + 90)
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                }
                 if MapInteraction.enabled && zoom > 1.6 {
                     Text("© OpenFreeMap · © OpenMapTiles · © OpenStreetMap")
                         .font(.system(size: 7.5)).foregroundStyle(.white.opacity(0.55))
@@ -113,7 +126,7 @@ public struct UAMapView: View {
                     )
                     .allowsHitTesting(false)
                     if zoom > 1.01 {
-                        Button { withAnimation(.snappy(duration: 0.3)) { zoom = 1; offset = .zero } } label: {
+                        Button { withAnimation(.snappy(duration: 0.3)) { zoom = 1; offset = home(size) } } label: {
                             Image(systemName: "arrow.down.right.and.arrow.up.left")
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(.white)
@@ -130,17 +143,29 @@ public struct UAMapView: View {
             .contentShape(Rectangle())
             .gesture(panGesture(size: size), including: MapInteraction.enabled && zoom > 1.001 ? .all : .subviews)
             .gesture(SpatialTapGesture(coordinateSpace: .local).onEnded { v in
-                guard let onPick else { return }
                 let loc = v.location
-                let s = size.width / GeoStore.shared.width
+                guard let onPick else {
+                    // Click on a target → info card; elsewhere → close it.
+                    let k = baseScale(size) * zoom
+                    let hit = snapshot.targets
+                        .map { t -> (String, CGFloat) in
+                            let p = GeoStore.shared.project(lat: t.lat, lon: t.lon)
+                            return (t.id, hypot(p.x * k + offset.width - loc.x, p.y * k + offset.height - loc.y))
+                        }
+                        .filter { $0.1 < 16 }.min { $0.1 < $1.1 }
+                    withAnimation(.snappy(duration: 0.2)) { selected = hit?.0 }
+                    return
+                }
+                let s = baseScale(size)
                 let m = CGPoint(x: (loc.x - offset.width) / (s * zoom), y: (loc.y - offset.height) / (s * zoom))
                 let ll = GeoStore.shared.unproject(m)
                 onPick(ll.lat, ll.lon)
-            }, including: onPick != nil ? .all : .subviews)
+            }, including: onPick != nil || (MapInteraction.enabled && showTargets) ? .all : .subviews)
             .onAppear {
+                if square, focus == nil, !didFocus, size.width > 0 { didFocus = true; offset = home(size); return }
                 guard let focus, !didFocus, size.width > 0 else { return }
                 didFocus = true
-                let s = size.width / GeoStore.shared.width
+                let s = baseScale(size)
                 let p = GeoStore.shared.project(lat: focus.lat, lon: focus.lon)
                 zoom = focus.zoom
                 offset = clamp(CGSize(width: size.width / 2 - p.x * s * zoom, height: size.height / 2 - p.y * s * zoom), zoom: zoom, size: size)
@@ -148,20 +173,35 @@ public struct UAMapView: View {
             .onTapGesture(count: 2) {
                 guard MapInteraction.enabled, onPick == nil else { return }
                 withAnimation(.snappy(duration: 0.3)) {
-                    if zoom > 1.01 { zoom = 1; offset = .zero } else { applyZoom(by: 2.5, at: CGPoint(x: size.width / 2, y: size.height / 2), size: size) }
+                    if zoom > 1.01 { zoom = 1; offset = home(size) } else { applyZoom(by: 2.5, at: CGPoint(x: size.width / 2, y: size.height / 2), size: size) }
                 }
             }
         }
-        .aspectRatio(geo.width / geo.height, contentMode: .fit)
+        .aspectRatio(square ? 1 : geo.width / geo.height, contentMode: .fit)
         .clipped()
         .accessibilityLabel("Карта тривог України")
     }
 
     // MARK: zoom / pan
 
+    /// Map units → points at zoom 1 (fit by width, or cover the square).
+    private func baseScale(_ size: CGSize) -> CGFloat {
+        let g = GeoStore.shared
+        return square ? max(size.width / g.width, size.height / g.height) : size.width / g.width
+    }
+
     private func clamp(_ o: CGSize, zoom z: CGFloat, size: CGSize) -> CGSize {
-        CGSize(width: min(0, max(size.width * (1 - z), o.width)),
-               height: min(0, max(size.height * (1 - z), o.height)))
+        let g = GeoStore.shared, k = baseScale(size) * z
+        let cw = g.width * k, ch = g.height * k
+        func axis(_ v: CGFloat, _ view: CGFloat, _ content: CGFloat) -> CGFloat {
+            content <= view ? (view - content) / 2 : min(0, max(view - content, v))
+        }
+        return CGSize(width: axis(o.width, size.width, cw), height: axis(o.height, size.height, ch))
+    }
+
+    private func home(_ size: CGSize) -> CGSize {
+        let g = GeoStore.shared, k = baseScale(size)
+        return clamp(CGSize(width: (size.width - g.width * k) / 2, height: (size.height - g.height * k) / 2), zoom: 1, size: size)
     }
 
     private func applyZoom(by factor: CGFloat, at p: CGPoint, size: CGSize) {
@@ -201,7 +241,7 @@ public struct UAMapView: View {
     /// Centre and MapLibre zoom matching the current zoom/offset.
     private func basemapView(size: CGSize) -> (lat: Double, lon: Double, zoom: Double) {
         let geo = GeoStore.shared
-        let k = size.width / geo.width * zoom
+        let k = baseScale(size) * zoom
         let c = CGPoint(x: (size.width / 2 - offset.width) / k, y: (size.height / 2 - offset.height) / k)
         let ll = geo.unproject(c)
         // MapLibre: 512 px world at zoom 0; ours: 256 px world → z = log2(points per 256-px world) − 1.
@@ -214,10 +254,9 @@ public struct UAMapView: View {
         let z = zoom, off = offset
         // Basemap fades in from ×1.4 to ×3.
         let detail: Double = MapInteraction.enabled ? max(0, min(1, (Double(z) - 1.4) / 1.6)) : 0
-        return TimelineView(.periodic(from: .now, by: MapInteraction.enabled && showTargets ? 2 : 3600)) { tl in
-        let now = tl.date
-        Canvas { ctx, size in
-            let s = size.width / geo.width
+        let now = Date()
+        return Canvas { ctx, size in
+            let s = baseScale(size)
             let tf = CGAffineTransform(scaleX: s * z, y: s * z).concatenating(CGAffineTransform(translationX: off.width, y: off.height))
             let lw = s * min(2.2, pow(z, 0.25))      // line-width scale: grows gently with zoom
             func pt(_ lat: Double, _ lon: Double) -> CGPoint { geo.project(lat: lat, lon: lon).applying(tf) }
@@ -265,15 +304,15 @@ public struct UAMapView: View {
 
             // Air targets: flight cones first (under everything), then icons.
             if showTargets {
-                // Dead reckoning: targets keep moving (and turning) between data refreshes.
-                let targets = MapInteraction.enabled ? snapshot.targets.map { $0.advanced(to: now) } : snapshot.targets
+                // Positions exactly as reported by dimap (the site doesn't extrapolate either).
+                let targets = snapshot.targets
                 let lineScale = max(0.8, min(1.6, sqrt(z)))
                 for t in targets {
                     guard t.bearing != nil else { continue }
                     let v = t.effectiveSpeed
-                    // 10-minute look-ahead; very fast objects are kept to a readable length.
-                    let minutes = min(10, 160 / max(v, 1) * 60)
-                    guard let cone = Projection.cone(t, minutes: minutes, width: 24) else { continue }
+                    // dimap: 10-minute look-ahead (ballistics kept to a readable length).
+                    let minutes = v > 1500 ? min(10, 250 / v * 60) : 10
+                    guard let cone = Projection.cone(t, minutes: minutes) else { continue }
                     let start = pt(t.lat, t.lon)
                     guard view.contains(start) || cone.center.contains(where: { view.contains(pt($0.lat, $0.lon)) }) else { continue }
                     let col = TargetGlyph.coneColor(speed: v)
@@ -354,7 +393,11 @@ public struct UAMapView: View {
                 ctx.fill(Path(ellipseIn: rect), with: .color(.white))
                 ctx.stroke(Path(ellipseIn: rect), with: .color(pinColor), lineWidth: max(1.5, 2.5 * lw))
             }
-        }
+            if let sel = selected, let t = snapshot.targets.first(where: { $0.id == sel }) {
+                let p = pt(t.lat, t.lon)
+                let r: CGFloat = 13
+                ctx.stroke(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)), with: .color(.white), lineWidth: 1.5)
+            }
         }
     }
 }
@@ -579,5 +622,75 @@ public struct StripedSwatch: View {
             Stripes.draw(in: ctx, path: p, scale: 0.35)
         }
         .frame(width: 8, height: 8)
+    }
+}
+
+/// Details of a clicked air target.
+struct TargetInfoCard: View {
+    let t: AirTarget
+    let city: Hromada?
+    var close: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                TargetIcon(kind: t.kind, size: 16, bearing: t.bearing ?? 0)
+                    .frame(width: 28, height: 28)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(TargetGlyph.color(t.kind).opacity(0.16)))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(t.model ?? t.kind.title).font(.system(size: 13, weight: .semibold))
+                    if t.model != nil { Text(t.kind.title).font(.system(size: 11)).foregroundStyle(.white.opacity(0.55)) }
+                }
+                Spacer(minLength: 8)
+                Button(action: close) {
+                    Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.white.opacity(0.7))
+                        .frame(width: 18, height: 18).background(Circle().fill(.white.opacity(0.1)))
+                }.buttonStyle(.plain)
+            }
+            Divider().overlay(Color.white.opacity(0.1))
+            ForEach(rows, id: \.0) { r in
+                HStack {
+                    Text(r.0).foregroundStyle(.white.opacity(0.55))
+                    Spacer(minLength: 12)
+                    Text(r.1).foregroundStyle(.white).multilineTextAlignment(.trailing)
+                }
+                .font(.system(size: 11.5))
+            }
+        }
+        .padding(12)
+        .frame(width: 236)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(hex: 0x1C1C1F).opacity(0.96)))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.12), lineWidth: 1))
+        .shadow(color: .black.opacity(0.4), radius: 14, y: 6)
+        .environment(\.colorScheme, .dark)
+    }
+
+    private var rows: [(String, String)] {
+        var r: [(String, String)] = []
+        if t.count > 1 { r.append(("Кількість", "\(t.count)")) }
+        r.append(("Швидкість", (t.speed ?? 0) > 0 ? "\(Int(t.speed!)) км/год" : "~\(Int(t.kind.defaultSpeed)) км/год (типова)"))
+        if let b = t.bearing { r.append(("Курс", "\(Int(b))° · \(Self.compass(b))")) }
+        if t.bearing != nil, abs(t.turn) >= 0.5 {
+            r.append(("Поворот", "\(t.turn > 0 ? "праворуч" : "ліворуч") \(String(format: "%.0f", abs(t.turn)))°/хв"))
+        }
+        if let a = t.altitude, a > 0 { r.append(("Висота", a >= 1000 ? String(format: "%.1f км", a / 1000) : "\(Int(a)) м")) }
+        if let c = city {
+            let km = Geo.distanceKm(lat1: t.lat, lon1: t.lon, lat2: c.lat, lon2: c.lon)
+            r.append(("До вас", String(format: "%.1f км", km).replacingOccurrences(of: ".", with: ",")))
+            if let e = Projection.eta(t, toLat: c.lat, lon: c.lon), e > 0 {
+                r.append(("Підліт", "≈\(Fmt.eta(e)) (\(Fmt.time(Date().addingTimeInterval(e * 60))))"))
+            } else {
+                r.append(("Підліт", "не в бік вас"))
+            }
+        }
+        let ago = max(0, Int(Date().timeIntervalSince(t.lastSeen)))
+        r.append(("Оновлено", ago < 60 ? "щойно" : "\(ago / 60) хв тому"))
+        r.append(("Джерела", t.sources.joined(separator: ", ")))
+        return r
+    }
+
+    static func compass(_ b: Double) -> String {
+        let d = ["Пн", "ПнСх", "Сх", "ПдСх", "Пд", "ПдЗх", "Зх", "ПнЗх"]
+        return d[Int(((b + 22.5).truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360) / 45) % 8]
     }
 }
