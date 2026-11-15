@@ -321,7 +321,13 @@ public final class Aggregator: @unchecked Sendable {
         // Дорозвідка from the news feed: only where there is no active alert/threat
         if let rc = dmNR.0 { Aggregator.applyRecon(rc, to: &s) }
         // Targets: dimap first, then ukrainealarm and neptun fill the gaps
-        s.targets = Aggregator.mergeTargets(Aggregator.mergeTargets(dmTR.0 ?? [], uaR.0?.targets ?? []), npR.0 ?? [], radiusKm: 15)
+        if dmTR.1.ok {
+            // dimap is the reference: show only its targets; other services only add details (course, model).
+            s.targets = Aggregator.mergeTargets(Aggregator.mergeTargets(dmTR.0 ?? [], uaR.0?.targets ?? [], addUnmatched: false), npR.0 ?? [], radiusKm: 15, addUnmatched: false)
+        } else {
+            // dimap is down: show only targets confirmed by both other services; doubtful ones are hidden.
+            s.targets = Aggregator.mergeTargets(uaR.0?.targets ?? [], npR.0 ?? [], radiusKm: 15, addUnmatched: false).filter { $0.sources.count >= 2 }
+        }
         // Tactical front-line drones (FPV, Lancet, Molnia) are noise for a city widget.
         s.targets.removeAll { t in
             t.kind == .fpv || ["Ланцет", "Молнія"].contains { (t.model ?? "").contains($0) }
@@ -343,7 +349,7 @@ public final class Aggregator: @unchecked Sendable {
         for c in rc.cities where (s.cities[c]?.level ?? .none) < .recon { s.cities[c] = recon }
     }
 
-    static func mergeTargets(_ a: [AirTarget], _ b: [AirTarget], radiusKm: Double = 10) -> [AirTarget] {
+    static func mergeTargets(_ a: [AirTarget], _ b: [AirTarget], radiusKm: Double = 10, addUnmatched: Bool = true) -> [AirTarget] {
         let now = Date()
         var out = a.filter { now.timeIntervalSince($0.lastSeen) < 300 }
         for t in b where now.timeIntervalSince(t.lastSeen) < 300 {
@@ -356,7 +362,7 @@ public final class Aggregator: @unchecked Sendable {
                 if out[i].model == nil { out[i].model = t.model }
                 if out[i].kind == .unknown { out[i].kind = t.kind }
                 if t.lastSeen > out[i].lastSeen { out[i].lastSeen = t.lastSeen }
-            } else {
+            } else if addUnmatched {
                 out.append(t)
             }
         }
