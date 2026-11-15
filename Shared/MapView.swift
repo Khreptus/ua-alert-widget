@@ -214,7 +214,9 @@ public struct UAMapView: View {
         let z = zoom, off = offset
         // Basemap fades in from ×1.4 to ×3.
         let detail: Double = MapInteraction.enabled ? max(0, min(1, (Double(z) - 1.4) / 1.6)) : 0
-        return Canvas { ctx, size in
+        return TimelineView(.periodic(from: .now, by: MapInteraction.enabled && showTargets ? 2 : 3600)) { tl in
+        let now = tl.date
+        Canvas { ctx, size in
             let s = size.width / geo.width
             let tf = CGAffineTransform(scaleX: s * z, y: s * z).concatenating(CGAffineTransform(translationX: off.width, y: off.height))
             let lw = s * min(2.2, pow(z, 0.25))      // line-width scale: grows gently with zoom
@@ -263,46 +265,55 @@ public struct UAMapView: View {
 
             // Air targets: flight cones first (under everything), then icons.
             if showTargets {
-                let targets = snapshot.targets
+                // Dead reckoning: targets keep moving (and turning) between data refreshes.
+                let targets = MapInteraction.enabled ? snapshot.targets.map { $0.advanced(to: now) } : snapshot.targets
+                let lineScale = max(0.8, min(1.6, sqrt(z)))
                 for t in targets {
                     guard t.bearing != nil else { continue }
                     let v = t.effectiveSpeed
-                    // dimap: 10-minute look-ahead; keep very fast objects to a readable length.
+                    // 10-minute look-ahead; very fast objects are kept to a readable length.
                     let minutes = min(10, 160 / max(v, 1) * 60)
-                    guard let cone = Projection.cone(t, minutes: minutes) else { continue }
+                    guard let cone = Projection.cone(t, minutes: minutes, width: 24) else { continue }
                     let start = pt(t.lat, t.lon)
                     guard view.contains(start) || cone.center.contains(where: { view.contains(pt($0.lat, $0.lon)) }) else { continue }
                     let col = TargetGlyph.coneColor(speed: v)
+                    let L = cone.left.map { pt($0.lat, $0.lon) }, R = cone.right.map { pt($0.lat, $0.lon) }, Cc = cone.center.map { pt($0.lat, $0.lon) }
+                    guard let lEnd = L.last, let rEnd = R.last, let cEnd = Cc.last else { continue }
+                    // Far edge: an arc through the tip of the course line.
+                    let ctrl = CGPoint(x: 2 * cEnd.x - (lEnd.x + rEnd.x) / 2, y: 2 * cEnd.y - (lEnd.y + rEnd.y) / 2)
                     var poly = Path()
                     poly.move(to: start)
-                    for q in cone.left { poly.addLine(to: pt(q.lat, q.lon)) }
-                    for q in cone.right.reversed() { poly.addLine(to: pt(q.lat, q.lon)) }
+                    for q in L { poly.addLine(to: q) }
+                    poly.addQuadCurve(to: rEnd, control: ctrl)
+                    for q in R.reversed() { poly.addLine(to: q) }
                     poly.closeSubpath()
-                    let end = cone.center.last.map { pt($0.lat, $0.lon) } ?? start
-                    ctx.fill(poly, with: .linearGradient(Gradient(colors: [col.opacity(0.42), col.opacity(0.03)]), startPoint: start, endPoint: end))
+                    ctx.fill(poly, with: .linearGradient(Gradient(colors: [col.opacity(0.30), col.opacity(0.10)]), startPoint: start, endPoint: cEnd))
+                    // Dashed sides and far arc.
+                    var edges = Path()
+                    edges.move(to: start); for q in L { edges.addLine(to: q) }
+                    edges.addQuadCurve(to: rEnd, control: ctrl)
+                    for q in R.reversed() { edges.addLine(to: q) }
+                    edges.addLine(to: start)
+                    ctx.stroke(edges, with: .color(col.opacity(0.8)), style: StrokeStyle(lineWidth: 0.9 * lineScale, lineCap: .round, lineJoin: .round, dash: [4, 3]))
+                    // Solid, curved course line.
                     var line = Path()
-                    line.move(to: start)
-                    for q in cone.center { line.addLine(to: pt(q.lat, q.lon)) }
-                    ctx.stroke(line, with: .color(col.opacity(0.85)), style: StrokeStyle(lineWidth: max(0.8, 1.1 * min(1.6, sqrt(z))), lineCap: .round, dash: [3, 2.5]))
-                    // Time marks along the course, like dimap: tick every minute-step, label at mid and tip.
-                    let pts = cone.center.map { pt($0.lat, $0.lon) }
-                    let len = zip([start] + pts, pts).reduce(0) { $0 + hypot($1.1.x - $1.0.x, $1.1.y - $1.0.y) }
-                    if len > 36, pts.count >= 4 {
-                        let n = pts.count
-                        let marks: [Int] = len > 110 ? [n / 2 - 1, n - 1] : [n - 1]
-                        for i in marks {
-                            let m = minutes * Double(i + 1) / Double(n)
-                            let q = pts[i]
-                            ctx.fill(Path(ellipseIn: CGRect(x: q.x - 2, y: q.y - 2, width: 4, height: 4)), with: .color(col))
-                            let label = ctx.resolve(Text(Fmt.eta(m)).font(.system(size: 8.5, weight: .bold)).foregroundColor(.black))
-                            let ts = label.measure(in: CGSize(width: 80, height: 20))
-                            // Offset to the side of the course so the label doesn't cover the line.
-                            let a = i > 0 ? atan2(q.y - pts[i - 1].y, q.x - pts[i - 1].x) : 0
-                            let c = CGPoint(x: q.x + cos(a + .pi / 2) * (ts.width / 2 + 6), y: q.y + sin(a + .pi / 2) * (ts.height / 2 + 5))
-                            let bg = CGRect(x: c.x - ts.width / 2 - 3.5, y: c.y - ts.height / 2 - 1, width: ts.width + 7, height: ts.height + 2)
-                            ctx.fill(Path(roundedRect: bg, cornerRadius: bg.height / 2), with: .color(col.opacity(0.92)))
-                            ctx.draw(label, at: c)
-                        }
+                    line.move(to: start); for q in Cc { line.addLine(to: q) }
+                    ctx.stroke(line, with: .color(col), style: StrokeStyle(lineWidth: 1.6 * lineScale, lineCap: .round, lineJoin: .round))
+
+                    // Heading at the selected place: dashed line to it + "64,2 км · ≈9 хв (21:53)" at the cone tip.
+                    if let city, let e = Projection.eta(t, toLat: city.lat, lon: city.lon), e > 0, e <= 60 {
+                        let cp = pt(city.lat, city.lon)
+                        var dl = Path(); dl.move(to: start); dl.addLine(to: cp)
+                        ctx.stroke(dl, with: .color(.white.opacity(0.45)), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                        let km = Geo.distanceKm(lat1: t.lat, lon1: t.lon, lat2: city.lat, lon2: city.lon)
+                        let kmS = String(format: "%.1f", km).replacingOccurrences(of: ".", with: ",")
+                        let txt = "\(kmS) км · ≈\(Fmt.eta(e)) (\(Fmt.time(now.addingTimeInterval(e * 60))))"
+                        let r = ctx.resolve(Text(txt).font(.system(size: 10, weight: .semibold)).foregroundColor(.white))
+                        let ts = r.measure(in: CGSize(width: 260, height: 20))
+                        let c = CGPoint(x: cEnd.x, y: cEnd.y + ts.height / 2 + 8)
+                        let bg = CGRect(x: c.x - ts.width / 2 - 5, y: c.y - ts.height / 2 - 2, width: ts.width + 10, height: ts.height + 4)
+                        ctx.fill(Path(roundedRect: bg, cornerRadius: 5), with: .color(.black.opacity(0.6)))
+                        ctx.draw(r, at: c)
                     }
                 }
 
@@ -321,9 +332,6 @@ public struct UAMapView: View {
                     }
                     var lines: [String] = []
                     if showLabels { lines.append(t.model ?? t.kind.title) }
-                    if let city, let e = Projection.eta(t, toLat: city.lat, lon: city.lon), e > 0, e <= 60 {
-                        lines.append("⏱ \(Fmt.eta(e))")
-                    }
                     if !lines.isEmpty {
                         let txt = Text(lines.joined(separator: " · ")).font(.system(size: 9, weight: .semibold)).foregroundColor(.white)
                         let r = ctx.resolve(txt)
@@ -346,6 +354,7 @@ public struct UAMapView: View {
                 ctx.fill(Path(ellipseIn: rect), with: .color(.white))
                 ctx.stroke(Path(ellipseIn: rect), with: .color(pinColor), lineWidth: max(1.5, 2.5 * lw))
             }
+        }
         }
     }
 }

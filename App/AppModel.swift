@@ -68,6 +68,7 @@ final class AppModel: ObservableObject {
         refreshing = true
         defer { refreshing = false }
         var snap = await aggregator.fetch()
+        snap.targets = TargetTracker.shared.update(snap.targets)
         applyTimedRecon(&snap)
         // keep previous data if every source failed
         if snap.sources.allSatisfy({ !$0.ok }), !snapshot.isEmpty {
