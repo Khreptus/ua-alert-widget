@@ -2,7 +2,7 @@ import Foundation
 import AppKit
 import SwiftUI
 
-/// Raster basemap (CARTO, OpenStreetMap data) shown under the alert layer when the map is zoomed in.
+/// Raster basemap (OpenStreetMap standard tiles; darkened in code for dark mode) shown under the alert layer when the map is zoomed in.
 /// Used only by the app: WidgetKit views are static and never ask for tiles.
 public final class TileStore: ObservableObject, @unchecked Sendable {
     public static let shared = TileStore()
@@ -18,26 +18,26 @@ public final class TileStore: ObservableObject, @unchecked Sendable {
     private var wanted = Set<Key>()
     private var inflight = 0
     private var tickScheduled = false
-    private let maxInflight = 8
+    private let maxInflight = 4
     private let session: URLSession
 
     private init() {
         cache.countLimit = 600
         let cfg = URLSessionConfiguration.default
-        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("tiles")
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+        if let old = caches?.appendingPathComponent("tiles") { try? FileManager.default.removeItem(at: old) }   // CARTO placeholders
+        let dir = caches?.appendingPathComponent("osm-tiles")
         cfg.urlCache = URLCache(memoryCapacity: 16 << 20, diskCapacity: 400 << 20, directory: dir)
         cfg.requestCachePolicy = .returnCacheDataElseLoad
-        cfg.httpMaximumConnectionsPerHost = 4
+        cfg.httpMaximumConnectionsPerHost = 2
         cfg.timeoutIntervalForRequest = 20
         session = URLSession(configuration: cfg)
     }
 
-    private func name(_ k: Key) -> NSString { "\(k.dark ? "d" : "l")/\(k.z)/\(k.x)/\(k.y)" as NSString }
+    private func name(_ k: Key) -> NSString { "\(k.z)/\(k.x)/\(k.y)" as NSString }
 
     private func url(_ k: Key) -> URL {
-        let sub = ["a", "b", "c", "d"][abs(k.x + k.y) % 4]
-        let style = k.dark ? "dark_all" : "light_all"
-        return URL(string: "https://\(sub).basemaps.cartocdn.com/\(style)/\(k.z)/\(k.x)/\(k.y)@2x.png")!
+        URL(string: "https://tile.openstreetmap.org/\(k.z)/\(k.x)/\(k.y).png")!
     }
 
     /// Cached image or nil (does not request).

@@ -85,7 +85,7 @@ public struct UAMapView: View {
             ZStack(alignment: .topTrailing) {
                 canvas(size: size)
                 if MapInteraction.enabled && zoom > 1.6 {
-                    Text("© OpenStreetMap · © CARTO")
+                    Text("© OpenStreetMap")
                         .font(.system(size: 7.5)).foregroundStyle(.white.opacity(0.55))
                         .padding(.horizontal, 4).padding(.vertical, 1.5)
                         .background(Capsule().fill(.black.opacity(0.35)))
@@ -175,7 +175,7 @@ public struct UAMapView: View {
         let geo = GeoStore.shared
         let store = TileStore.shared
         let ppw = geo.unitsPerWorldPixel * Double(k)          // screen points per zoom-0 world pixel
-        let tz = max(3, min(17, Int(log2(ppw).rounded())))
+        let tz = max(3, min(18, Int((log2(ppw) + 0.45).rounded())))
         let n = 1 << tz
         let a = geo.world(CGPoint(x: -off.width / k, y: -off.height / k))
         let b = geo.world(CGPoint(x: (size.width - off.width) / k, y: (size.height - off.height) / k))
@@ -189,7 +189,15 @@ public struct UAMapView: View {
         store.beginFrame()
         var c = ctx
         c.opacity = opacity
-        c.fill(Path(CGRect(origin: .zero, size: size)), with: .color(dark ? Color(hex: 0x0E0E10) : Color(hex: 0xF2F2F2)))
+        c.fill(Path(CGRect(origin: .zero, size: size)), with: .color(dark ? Color(hex: 0x16171A) : Color(hex: 0xF2EFE9)))
+        if dark {
+            // Night style from the standard OSM palette: invert, swap hues back, mute.
+            c.addFilter(.colorInvert)
+            c.addFilter(.hueRotation(.degrees(180)))
+            c.addFilter(.saturation(0.55))
+            c.addFilter(.brightness(-0.06))
+            c.addFilter(.contrast(0.92))
+        }
         for y in y0...y1 {
             for x in x0...x1 {
                 let rect = screen(geo.tileRect(z: tz, x: x, y: y)).insetBy(dx: -0.25, dy: -0.25)
