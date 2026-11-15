@@ -195,7 +195,7 @@ struct NotchIsland: View {
             .frame(width: w, height: h)
             .position(x: g.size.width / 2, y: h / 2)
             .contentShape(Rectangle())
-            .onTapGesture { SidePanelController.shared.show(); n.dismiss() }
+            .onTapGesture { SidePanelController.shared.show(sticky: true); n.dismiss() }
         }
         .preferredColorScheme(.dark)
     }

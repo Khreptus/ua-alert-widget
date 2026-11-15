@@ -14,11 +14,21 @@ final class SidePanelController: ObservableObject {
     private var monitors: [Any] = []
     private var edgeSince: Date?
     private var hideWork: DispatchWorkItem?
+    /// Opened from the menu bar icon: stays until a click outside (no hover auto-hide).
+    private var sticky = false
 
     func start() {
         let handler: (NSEvent) -> Void = { [weak self] _ in MainActor.assumeIsolated { self?.mouseMoved() } }
         if let g = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: handler) { monitors.append(g) }
         if let l = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved], handler: { e in handler(e); return e }) { monitors.append(l) }
+        if let c = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.visible, self.sticky, !self.pinned, let p = self.panel else { return }
+                let m = NSEvent.mouseLocation
+                // Clicks on the menu bar (incl. our icon) are handled by the icon itself.
+                if !p.frame.contains(m), m.y < (NSScreen.main?.visibleFrame.maxY ?? .greatestFiniteMagnitude) { self.hide() }
+            }
+        }) { monitors.append(c) }
         if let k = NSEvent.addLocalMonitorForEvents(matching: [.keyDown], handler: { [weak self] e in
             if e.keyCode == 53, MainActor.assumeIsolated({ self?.visible == true }) { MainActor.assumeIsolated { self?.hide() }; return nil }
             return e
@@ -41,7 +51,7 @@ final class SidePanelController: ObservableObject {
             edgeSince = nil
         }
         // Auto-hide when the pointer leaves (unless pinned).
-        if visible, !pinned, let p = panel {
+        if visible, !pinned, !sticky, let p = panel {
             if p.frame.insetBy(dx: -24, dy: -24).contains(m) { hideWork?.cancel(); hideWork = nil }
             else if hideWork == nil {
                 let w = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.hideWork = nil; self?.hide() } }
@@ -75,9 +85,10 @@ final class SidePanelController: ObservableObject {
         return p
     }
 
-    func toggle() { visible ? hide() : show() }
+    func toggle(sticky: Bool = false) { visible ? hide() : show(sticky: sticky) }
 
-    func show() {
+    func show(sticky: Bool = false) {
+        self.sticky = sticky
         guard let s = screen else { return }
         if panel == nil { panel = makePanel() }
         guard let p = panel else { return }

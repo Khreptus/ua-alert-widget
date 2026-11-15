@@ -16,7 +16,8 @@ final class StatusBarController {
     func setup() {
         if let b = item.button {
             b.target = self
-            b.action = #selector(toggle)
+            b.action = #selector(clicked)
+            b.sendAction(on: [.leftMouseUp, .rightMouseUp])
             b.imagePosition = .imageLeading
         }
         updateButton()
@@ -37,6 +38,18 @@ final class StatusBarController {
             b.title = " " + d
         } else {
             b.title = ""
+        }
+    }
+
+    /// Left click → side panel (main UI); right click / ⌥-click → compact menu.
+    @objc private func clicked() {
+        let e = NSApp.currentEvent
+        if e?.type == .rightMouseUp || e?.modifierFlags.contains(.option) == true || e?.modifierFlags.contains(.control) == true {
+            SidePanelController.shared.hide()
+            toggle()
+        } else {
+            close()
+            SidePanelController.shared.toggle(sticky: true)
         }
     }
 

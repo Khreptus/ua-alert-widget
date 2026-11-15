@@ -102,7 +102,7 @@ struct MenuBarContent: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 4)
-            Button { AppDelegate.shared?.closeMenu(); SidePanelController.shared.show() } label: {
+            Button { AppDelegate.shared?.closeMenu(); SidePanelController.shared.show(sticky: true) } label: {
                 Label("Відкрити бічну панель", systemImage: "sidebar.right").frame(maxWidth: .infinity)
             }
             .controlSize(.large)
