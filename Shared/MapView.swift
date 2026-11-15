@@ -339,6 +339,42 @@ public struct UAMapView: View {
                     line.move(to: start); for q in Cc { line.addLine(to: q) }
                     ctx.stroke(line, with: .color(col), style: StrokeStyle(lineWidth: 1.6 * lineScale, lineCap: .round, lineJoin: .round))
 
+                    // Minute marks along the course (dimap style): dot + "N хв".
+                    let pathPts = [start] + Cc
+                    let dt = minutes / Double(Cc.count)
+                    func at(_ m: Double) -> (CGPoint, CGFloat) {
+                        let f = max(0, min(Double(pathPts.count - 1), m / dt))
+                        let i = min(pathPts.count - 2, Int(f)), u = CGFloat(f - Double(i))
+                        let a = pathPts[i], b = pathPts[i + 1]
+                        return (CGPoint(x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u), atan2(b.y - a.y, b.x - a.x))
+                    }
+                    let whole = Int(minutes.rounded(.down))
+                    if whole >= 1 {
+                        let p1 = at(1).0
+                        let gap = hypot(p1.x - start.x, p1.y - start.y)           // screen distance of one minute
+                        let every = gap >= 22 ? 1 : (gap * 2 >= 22 ? 2 : (gap * 5 >= 22 ? 5 : 0))
+                        if every > 0 {
+                            for m in stride(from: every, through: whole, by: every) {
+                                let (q, ang) = at(Double(m))
+                                let r: CGFloat = 3.2
+                                let dot = Path(ellipseIn: CGRect(x: q.x - r, y: q.y - r, width: r * 2, height: r * 2))
+                                ctx.fill(dot, with: .color(col))
+                                ctx.stroke(dot, with: .color(.black.opacity(0.8)), lineWidth: 1)
+                                let label = "\(m) хв"
+                                let font = Font.system(size: 11, weight: .heavy)
+                                let ts = ctx.resolve(Text(label).font(font)).measure(in: CGSize(width: 80, height: 20))
+                                // Place the label beside the line (perpendicular), above-left like dimap.
+                                let nx = sin(ang), ny = -cos(ang)
+                                let side: CGFloat = nx > 0 ? -1 : 1
+                                let c = CGPoint(x: q.x + nx * side * (ts.width / 2 + 5), y: q.y + ny * side * (ts.height / 2 + 2) - 6)
+                                for (dx, dy) in [(-1.0, 0.0), (1, 0), (0, -1), (0, 1), (-0.8, -0.8), (0.8, 0.8), (-0.8, 0.8), (0.8, -0.8)] {
+                                    ctx.draw(Text(label).font(font).foregroundColor(.black.opacity(0.85)), at: CGPoint(x: c.x + dx, y: c.y + dy))
+                                }
+                                ctx.draw(Text(label).font(font).foregroundColor(col), at: c)
+                            }
+                        }
+                    }
+
                     // Heading at the selected place: dashed line to it + "64,2 км · ≈9 хв (21:53)" at the cone tip.
                     if let city, let e = Projection.eta(t, toLat: city.lat, lon: city.lon), e > 0, e <= 60 {
                         let cp = pt(city.lat, city.lon)
