@@ -146,8 +146,7 @@ struct WidgetSettingsPopover: View {
                     }
                 }.buttonStyle(.plain)
                 toggleRow("Повітряні цілі", "dimap · neptun · ukrainealarm", $prefs.showTargets)
-                toggleRow("Сирена — тривога", "Масштабна (червона)", $prefs.sirenOnAlert)
-                toggleRow("Сирена — загроза", "Дрони / ракети (жовта)", $prefs.sirenOnThreat)
+                toggleRow("Сирена — тривога", "Коли ваш район зафарбований", $prefs.sirenOnAlert)
                 toggleRow("Жовта тривога і дорозвідка", "Жовтим і смугами на карті", $prefs.showThreat)
                 row("Карта") {
                     Picker("", selection: $prefs.mapMode) { ForEach(MapMode.allCases) { Text($0.title).tag($0) } }
@@ -235,7 +234,6 @@ struct SettingsView: View {
             Form {
                 Section("Сирена") {
                     Toggle("🔴 Сирена при масштабній тривозі", isOn: $prefs.sirenOnAlert)
-                    Toggle("🟡 Сирена при загрозі дронів / ракет", isOn: $prefs.sirenOnThreat)
                     Toggle("🟡 Банер при загрозі (без звуку)", isOn: $prefs.bannerOnThreat)
                     Toggle("Банер про дорозвідку перед відбоєм", isOn: $prefs.notifyRecon)
                     Toggle("Тихий сигнал при відбої", isOn: $prefs.chimeOnClear)

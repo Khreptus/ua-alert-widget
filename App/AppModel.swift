@@ -115,7 +115,7 @@ final class AppModel: ObservableObject {
         if rebaseline {
             // Just woke up: silent summary only.
             rebaseline = false
-            if st.level == .alert, lastLevel != .alert {
+            if st.isAlarm, (lastLevel ?? .none) < .threat {
                 notify(title: "🔴 Триває тривога — \(city.displayName)", body: city.raion, silent: true)
             }
             lastLevel = st.level; lastHigh = st.highThreat
@@ -125,17 +125,11 @@ final class AppModel: ObservableObject {
         defer { lastLevel = st.level; lastHigh = st.highThreat }
         guard let prev = lastLevel else { return }
 
-        if st.level == .alert && prev != .alert {
-            notify(title: "🔴 Повітряна тривога — \(city.displayName)", body: "\(city.raion) · \(Fmt.time(Date())). Пройдіть в укриття.")
-            NotchController.shared.show(.init(kind: .alert, title: "Повітряна тривога", subtitle: "\(city.displayName) · з \(Fmt.time(st.since ?? Date()))"), seconds: 12)
+        if st.isAlarm && prev < .threat {
+            notify(title: "🔴 Повітряна тривога — \(city.displayName)", body: "\(st.attack.map { $0 + " · " } ?? "")\(city.raion) · \(Fmt.time(Date())). Пройдіть в укриття.")
+            NotchController.shared.show(.init(kind: .alert, title: st.attack.map { "Тривога · \($0)" } ?? "Повітряна тривога",
+                                              subtitle: "\(city.displayName) · з \(Fmt.time(st.since ?? Date()))"), seconds: 12)
             if prefs.sirenOnAlert { playSiren() }
-            reloadWidgets(force: true)
-        } else if st.level == .threat && prev < .threat {
-            if prefs.sirenOnThreat { playSiren() }
-            if prefs.bannerOnThreat || prefs.sirenOnThreat {
-                notify(title: "🟡 Тривога (дрони / ракети) — \(city.displayName)", body: city.raion, silent: !prefs.sirenOnThreat)
-            }
-            NotchController.shared.show(.init(kind: .threat, title: "Тривога · дрони / ракети", subtitle: "\(city.displayName) · \(city.raion)", target: st.etaKind ?? st.nearestKind))
             reloadWidgets(force: true)
         } else if st.level == .recon && prev > .recon {
             stopSiren()

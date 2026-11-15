@@ -64,7 +64,7 @@ struct MenuBarLabel: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
         let st = model.status
-        let alarm = st?.level == .alert
+        let alarm = st?.isAlarm == true
         HStack(spacing: 3) {
             Image(systemName: alarm || st?.highThreat == true ? "light.beacon.max.fill" : "light.beacon.max")
             if alarm, let d = Fmt.duration(since: st?.since, now: model.now) { Text(d).monospacedDigit() }

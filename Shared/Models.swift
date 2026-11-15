@@ -237,9 +237,36 @@ public struct CityStatus: Sendable {
     /// Minutes until the closest target heading at the city arrives.
     public var etaMinutes: Double? = nil
     public var etaKind: TargetKind? = nil
+    /// What the attack looks like right now: "Балістика", "Масована атака · дрони + ракети", "Дрони" …
+    public var attack: String? = nil
+    /// Red and yellow are both air-raid alerts (yellow is shown as such only on the map).
+    public var isAlarm: Bool { level >= .threat }
 }
 
 public extension Snapshot {
+    /// Rough description of the current attack for the place: ballistic / massive / drones / missiles.
+    func attackKind(lat: Double, lon: Double) -> String? {
+        var near: [TargetKind: Int] = [:], all: [TargetKind: Int] = [:]
+        for t in targets {
+            all[t.kind, default: 0] += t.count
+            if Geo.distanceKm(lat1: t.lat, lon1: t.lon, lat2: lat, lon2: lon) < 400 { near[t.kind, default: 0] += t.count }
+        }
+        let drones = (all[.shahed] ?? 0) + (all[.jetShahed] ?? 0) + (all[.geran5] ?? 0)
+        let missiles = (all[.cruise] ?? 0) + (all[.ballistic] ?? 0)
+        let massive = drones >= 25 || missiles >= 5
+        if (near[.ballistic] ?? 0) > 0 { return massive ? "Балістика · масована атака" : "Балістика" }
+        if massive {
+            let parts = [drones > 0 ? "дрони" : nil, missiles > 0 ? "ракети" : nil].compactMap { $0 }
+            return "Масована атака" + (parts.isEmpty ? "" : " · " + parts.joined(separator: " + "))
+        }
+        let nd = (near[.shahed] ?? 0) + (near[.jetShahed] ?? 0) + (near[.geran5] ?? 0)
+        if (near[.cruise] ?? 0) > 0 { return nd > 0 ? "Ракети + дрони" : "Крилаті ракети" }
+        if (near[.kab] ?? 0) > 0 { return "КАБи" }
+        if nd > 0 { return nd == 1 ? "Дрон поруч" : "Дрони · \(nd)" }
+        if (near[.aircraft] ?? 0) + (near[.helicopter] ?? 0) > 0 { return "Авіація" }
+        return nil
+    }
+
     func status(for city: Hromada, geo: GeoStore = .shared) -> CityStatus {
         var st = RegionAlert(level: .none)
         // The city's state = what is painted on the map: its raion (+ the city dot for Kyiv / regional centres).
@@ -260,7 +287,8 @@ public extension Snapshot {
                 if e <= 30 { high = true }
             }
         }
-        return CityStatus(level: st.level, since: st.since, highThreat: high, nearestKm: nearest, nearestKind: nearestKind, etaMinutes: eta, etaKind: etaKind)
+        return CityStatus(level: st.level, since: st.since, highThreat: high, nearestKm: nearest, nearestKind: nearestKind, etaMinutes: eta, etaKind: etaKind,
+                          attack: attackKind(lat: city.lat, lon: city.lon))
     }
 }
 

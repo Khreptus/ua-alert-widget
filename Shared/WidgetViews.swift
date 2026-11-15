@@ -26,7 +26,7 @@ public struct WidgetModel {
     }
 
     public var status: CityStatus? { city.map { snapshot.status(for: $0) } }
-    public var isAlarm: Bool { status?.level == .alert }
+    public var isAlarm: Bool { status?.isAlarm ?? false }
     public var noData: Bool { snapshot.isEmpty || (!snapshot.sources.isEmpty && snapshot.sources.allSatisfy { !$0.ok }) }
 }
 
@@ -72,7 +72,7 @@ struct StateText {
         guard let s else { return ("Оберіть місто", Theme.secondary) }
         switch s.level {
         case .alert: return ("Тривога", Theme.red)
-        case .threat: return ("Тривога", Theme.amber)
+        case .threat: return ("Тривога", Theme.red)
         case .recon: return ("Дорозвідка", Theme.amber)
         case .none: return s.highThreat ? ("Висока загроза", Theme.amber) : ("Спокійно", Theme.green)
         }
@@ -80,11 +80,17 @@ struct StateText {
 
     static func subtitle(_ s: CityStatus?, now: Date) -> String {
         guard let s else { return "" }
-        if s.level == .alert, let d = Fmt.duration(since: s.since, now: now), let since = s.since { return "з \(Fmt.time(since)) · \(d)" }
+        if s.isAlarm {
+            var parts: [String] = []
+            if let a = s.attack { parts.append(a) }
+            if let since = s.since, let d = Fmt.duration(since: since, now: now) { parts.append("з \(Fmt.time(since)) · \(d)") }
+            if parts.isEmpty { parts.append(s.level == .threat ? "Дрони / ракети" : "Пройдіть в укриття") }
+            return parts.joined(separator: " · ")
+        }
         if s.highThreat, let e = s.etaMinutes { return "\(s.etaKind?.title ?? "Ціль") · підліт ~\(Fmt.eta(e))" }
         if let km = s.nearestKm, km < 150, s.highThreat { return "\(s.nearestKind?.title ?? "Ціль") за \(Int(km)) км" }
         switch s.level {
-        case .threat: return "Жовта · дрони / ракети"
+        case .threat: return "Дрони / ракети"
         case .recon: return "Перед відбоєм"
         default: return "Тривоги немає"
         }
@@ -145,13 +151,13 @@ struct CityRow: View {
     }
     func color(_ s: CityStatus?) -> Color {
         guard let s else { return Theme.secondary }
-        switch s.level { case .alert: return Theme.red; case .threat, .recon: return Theme.amber; case .none: return s.highThreat ? Theme.amber : Theme.green }
+        switch s.level { case .alert, .threat: return Theme.red; case .recon: return Theme.amber; case .none: return s.highThreat ? Theme.amber : Theme.green }
     }
     func rightText(_ s: CityStatus?) -> String {
         guard let s else { return "" }
         switch s.level {
         case .alert: return "Тривога" + (Fmt.duration(since: s.since, now: m.now).map { " · \($0)" } ?? "")
-        case .threat: return "Жовта тривога · дрони/ракети"
+        case .threat: return "Тривога · дрони/ракети"
         case .recon: return "Дорозвідка"
         case .none: return s.highThreat ? "Висока загроза" : "Тривоги немає"
         }

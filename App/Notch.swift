@@ -170,8 +170,8 @@ struct NotchIsland: View {
     private func color(_ k: NotchController.Kind) -> Color {
         switch k {
         case .alert: return Color(hex: 0xFF453A)
-        case .threat: return Color(hex: 0xFF9F0A)
-        case .recon: return Color(hex: 0xE0A84E)
+        case .threat: return Color(hex: 0xFF453A)
+        case .recon: return Color(hex: 0xFF453A)
         case .clear: return Color(hex: 0x30D158)
         }
     }
@@ -188,7 +188,9 @@ struct NotchIsland: View {
                     .shadow(color: .black.opacity(big ? 0.5 : 0), radius: 18, y: 8)
                 if big, let c = n.card {
                     // Thin accent outline (per Figma).
-                    shape.strokeBorder(color(c.kind), lineWidth: 1)
+                    shape.strokeBorder(color(c.kind), lineWidth: 1.2)
+                        .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .clear, location: 0.62), .init(color: .white, location: 0.9)],
+                                             startPoint: .top, endPoint: .bottom))
                 }
                 if big, let c = n.card { expandedBody(c) } else if n.ongoingSince != nil { compactBody }
             }

@@ -136,7 +136,7 @@ struct SidePanelView: View {
                     header
                     StatusCard(st: st)
                     UAMapView(snapshot: model.snapshot, city: model.city, showTargets: prefs.showTargets, showThreat: prefs.showThreat, mode: prefs.mapMode,
-                              pinColor: model.status?.level == .alert ? Theme.red : Theme.blue)
+                              pinColor: model.status?.isAlarm == true ? Theme.red : Theme.blue)
                         .background(Color(hex: 0x111113))
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     ThreatsList()
@@ -197,7 +197,7 @@ private struct StatusCard: View {
 
     var body: some View {
         let level = st?.level ?? .none
-        let alarm = level == .alert
+        let alarm = st?.isAlarm == true
         let (title, color) = StateText.title(st)
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
@@ -231,7 +231,7 @@ private struct StatusCard: View {
     private var subtitle: String {
         guard let st else { return "" }
         let base = StateText.subtitle(st, now: model.now)
-        return st.level == .alert ? "\(base) · \(model.city?.raion ?? "")" : base
+        return base
     }
 }
 

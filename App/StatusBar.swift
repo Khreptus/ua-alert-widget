@@ -30,11 +30,11 @@ final class StatusBarController {
     private func updateButton() {
         guard let b = item.button else { return }
         let st = model.status
-        let filled = st?.level == .alert || st?.highThreat == true
+        let filled = st?.isAlarm == true || st?.highThreat == true
         let img = NSImage(systemSymbolName: filled ? "light.beacon.max.fill" : "light.beacon.max", accessibilityDescription: "Тривога UA")
         img?.isTemplate = true
         b.image = img
-        if st?.level == .alert, let d = Fmt.duration(since: st?.since, now: model.now) {
+        if st?.isAlarm == true, let d = Fmt.duration(since: st?.since, now: model.now) {
             b.title = " " + d
         } else {
             b.title = ""
