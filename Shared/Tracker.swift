@@ -11,22 +11,30 @@ public extension Geo {
 }
 
 public extension AirTarget {
-    /// Dead-reckoned position `now`: the target keeps flying along its (turning) course since the last fix.
-    func advanced(to now: Date, maxMinutes: Double = 4) -> AirTarget {
+    /// Real-time position `now`: keeps flying along the (turning) course since the fix was received,
+    /// and eases out the jump between the old prediction and a new fix over ~1.5 s.
+    func advanced(to now: Date, maxMinutes: Double = 2) -> AirTarget {
         guard bearing != nil else { return self }
-        let m = min(maxMinutes, max(0, now.timeIntervalSince(lastSeen) / 60))
-        guard m > 0.05 else { return self }
+        let base = fixAt ?? lastSeen
+        let secs = max(0, now.timeIntervalSince(base))
+        let m = min(maxMinutes, secs / 60)
         var t = self
         var p = Projection.LL(lat: lat, lon: lon)
-        let step = 0.25
-        var done = 0.0
-        while done < m {
-            let dt = min(step, m - done)
-            p = Geo.destination(p, km: effectiveSpeed * dt / 60, bearing: Projection.heading(self, at: done + dt / 2, horizon: 10))
-            done += dt
+        if m > 0.002 {
+            let step = 0.1
+            var done = 0.0
+            while done < m {
+                let dt = min(step, m - done)
+                p = Geo.destination(p, km: effectiveSpeed * dt / 60, bearing: Projection.heading(self, at: done + dt / 2, horizon: 10))
+                done += dt
+            }
+            t.bearing = Projection.heading(self, at: m, horizon: 10)
+            // The turn already flown is used up: the cone keeps bending from the current heading.
+            t.turn = turn * max(0, 1 - m / 10)
         }
-        t.lat = p.lat; t.lon = p.lon
-        t.bearing = Projection.heading(self, at: m, horizon: 10)
+        let k = max(0, 1 - secs / 1.5)
+        t.lat = p.lat + corrLat * k
+        t.lon = p.lon + corrLon * k
         return t
     }
 }
@@ -36,6 +44,8 @@ public final class TargetTracker: @unchecked Sendable {
     public static let shared = TargetTracker()
     private struct Fix { var lat: Double; var lon: Double; var bearing: Double?; var time: Date; var turn: Double }
     private var last: [String: Fix] = [:]
+    /// Last target as delivered to the UI (with its fix time) — to keep motion continuous.
+    private var shown: [String: AirTarget] = [:]
     private let lock = NSLock()
 
     public func update(_ targets: [AirTarget], now: Date = Date()) -> [AirTarget] {
@@ -62,8 +72,22 @@ public final class TargetTracker: @unchecked Sendable {
             } else {
                 next[t.id] = Fix(lat: t.lat, lon: t.lon, bearing: t.bearing, time: now, turn: t.turn)
             }
+            // Same fix as before → keep its receive time; new fix → start from now, hiding the jump.
+            if let prev = shown[t.id], abs(prev.lat - t.lat) < 1e-6, abs(prev.lon - t.lon) < 1e-6, prev.bearing == t.bearing {
+                t.fixAt = prev.fixAt; t.corrLat = prev.corrLat; t.corrLon = prev.corrLon; t.turn = prev.turn
+            } else {
+                if let prev = shown[t.id] {
+                    let was = prev.advanced(to: now)
+                    let dLat = was.lat - t.lat, dLon = was.lon - t.lon
+                    // Only smooth small jumps; a big correction is shown at once.
+                    if Geo.distanceKm(lat1: was.lat, lon1: was.lon, lat2: t.lat, lon2: t.lon) < 15 { t.corrLat = dLat; t.corrLon = dLon }
+                }
+                t.fixAt = now
+            }
+            shown[t.id] = t
             out.append(t)
         }
+        shown = shown.filter { k, _ in next[k] != nil }
         last = next
         return out
     }

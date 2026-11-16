@@ -103,6 +103,10 @@ public struct AirTarget: Identifiable, Codable, Hashable, Sendable {
     /// The source sent its own turn rate (dimap `_turn`): use it as is, even when 0.
     public var turnKnown = false
     public var altitude: Double? = nil
+    /// When this fix was received locally (for smooth real-time motion), and the jump to hide when it arrived.
+    public var fixAt: Date? = nil
+    public var corrLat: Double = 0
+    public var corrLon: Double = 0
     /// Group size ("×3").
     public var count: Int = 1
 

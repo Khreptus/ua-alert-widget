@@ -147,7 +147,7 @@ public struct UAMapView: View {
                 guard let onPick else {
                     // Click on a target → info card; elsewhere → close it.
                     let k = baseScale(size) * zoom
-                    let hit = snapshot.targets
+                    let hit = snapshot.targets.map { $0.advanced(to: Date()) }
                         .map { t -> (String, CGFloat) in
                             let p = GeoStore.shared.project(lat: t.lat, lon: t.lon)
                             return (t.id, hypot(p.x * k + offset.width - loc.x, p.y * k + offset.height - loc.y))
@@ -254,8 +254,11 @@ public struct UAMapView: View {
         let z = zoom, off = offset
         // Basemap fades in from ×1.4 to ×3.
         let detail: Double = MapInteraction.enabled ? max(0, min(1, (Double(z) - 1.4) / 1.6)) : 0
-        let now = Date()
-        return Canvas { ctx, size in
+        // Real time: redraw every second, targets move and cones bend continuously between data fixes.
+        let live = MapInteraction.enabled && showTargets && !snapshot.targets.isEmpty
+        return TimelineView(.periodic(from: .now, by: live ? 1 : 3600)) { tl in
+        let now = tl.date
+        Canvas { ctx, size in
             let s = baseScale(size)
             let tf = CGAffineTransform(scaleX: s * z, y: s * z).concatenating(CGAffineTransform(translationX: off.width, y: off.height))
             let lw = s * min(2.2, pow(z, 0.25))      // line-width scale: grows gently with zoom
@@ -304,8 +307,7 @@ public struct UAMapView: View {
 
             // Air targets: flight cones first (under everything), then icons.
             if showTargets {
-                // Positions exactly as reported by dimap (the site doesn't extrapolate either).
-                let targets = snapshot.targets
+                let targets = MapInteraction.enabled ? snapshot.targets.map { $0.advanced(to: now) } : snapshot.targets
                 let lineScale = max(0.8, min(1.6, sqrt(z)))
                 for t in targets {
                     guard t.bearing != nil else { continue }
@@ -429,11 +431,12 @@ public struct UAMapView: View {
                 ctx.fill(Path(ellipseIn: rect), with: .color(.white))
                 ctx.stroke(Path(ellipseIn: rect), with: .color(pinColor), lineWidth: max(1.5, 2.5 * lw))
             }
-            if let sel = selected, let t = snapshot.targets.first(where: { $0.id == sel }) {
+            if let sel = selected, let t = snapshot.targets.first(where: { $0.id == sel })?.advanced(to: now) {
                 let p = pt(t.lat, t.lon)
                 let r: CGFloat = 13
                 ctx.stroke(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)), with: .color(.white), lineWidth: 1.5)
             }
+        }
         }
     }
 }

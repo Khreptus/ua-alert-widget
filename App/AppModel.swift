@@ -59,8 +59,8 @@ final class AppModel: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 6, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refresh() }
         }
-        // Targets move fast: poll dimap targets alone every 2 s, independent of the slower full refresh.
-        fastTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+        // Targets move fast: poll dimap targets alone every 1 s, independent of the slower full refresh.
+        fastTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refreshTargets() }
         }
         clock = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
