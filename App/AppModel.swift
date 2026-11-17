@@ -18,6 +18,8 @@ final class AppModel: ObservableObject {
     private var timer: Timer?
     private var clock: Timer?
     private var fastTimer: Timer?
+    /// Danger-for-the-city banner at most once per 10 min (targets hovering around 35 km).
+    private var lastHighAlert = Date.distantPast
     private var fastBusy = false
     private var refreshing = false
 
@@ -161,13 +163,15 @@ final class AppModel: ObservableObject {
                 if prefs.chimeOnClear { siren.play(.chime, seconds: 1, volume: prefs.volume * 0.7) }
             }
             reloadWidgets(force: true)
-        } else if st.highThreat && !lastHigh {
+        } else if st.highThreat && !lastHigh && Date().timeIntervalSince(lastHighAlert) > 600 {
+            lastHighAlert = Date()
             let dist = st.etaMinutes.map { " · підліт ~\(Fmt.eta($0))" } ?? (st.nearestKm.map { " · \(Int($0)) км" } ?? "")
             // Only a quiet banner: the siren sounds only when the raion is painted on the map.
             notify(title: "Ціль рухається в бік міста — \(city.displayName)", body: "\((st.etaKind ?? st.nearestKind)?.title ?? "Ціль")\(dist)", silent: true)
             let k = st.etaKind ?? st.nearestKind
-            NotchController.shared.show(.init(kind: .threat, title: "\(k?.title ?? "Ціль") летить на місто",
-                                              subtitle: (st.nearestKm.map { "\(Int($0)) км · " } ?? "") + "курс на \(city.displayName)",
+            let k2 = st.nearestKind ?? k
+            NotchController.shared.show(.init(kind: .threat, title: "\(k2?.title ?? "Ціль") поруч з містом",
+                                              subtitle: (st.nearestKm.map { "\(Int($0)) км від " } ?? "") + city.displayName + (st.etaMinutes != nil ? " · курс на вас" : ""),
                                               eta: st.etaMinutes.map { Fmt.eta($0) }, target: k))
         }
         reloadWidgets(force: false)

@@ -288,10 +288,10 @@ public extension Snapshot {
         for t in targets {
             let d = Geo.distanceKm(lat1: t.lat, lon1: t.lon, lat2: city.lat, lon2: city.lon)
             if nearest == nil || d < nearest! { nearest = d; nearestKind = t.kind }
-            if d < 25 { high = true }
+            // Danger for the city: a target within ~35 km (course alone is not enough — too many false alarms).
+            if d <= 35 { high = true }
             if let e = Projection.eta(t, toLat: city.lat, lon: city.lon) {
                 if eta == nil || e < eta! { eta = e; etaKind = t.kind }
-                if e <= 30 { high = true }
             }
         }
         return CityStatus(level: st.level, since: st.since, highThreat: high, nearestKm: nearest, nearestKind: nearestKind, etaMinutes: eta, etaKind: etaKind,
