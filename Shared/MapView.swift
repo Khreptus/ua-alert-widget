@@ -309,8 +309,14 @@ public struct UAMapView: View {
             if showTargets {
                 let targets = MapInteraction.enabled ? snapshot.targets.map { $0.advanced(to: now) } : snapshot.targets
                 let lineScale = max(0.8, min(1.6, sqrt(z)))
+                // Cones appear only when zoomed in (fade in ×2.5 → ×4); a clicked target always shows its cone.
+                let coneAlpha = max(0, min(1, (Double(z) - 2.5) / 1.5))
                 for t in targets {
                     guard t.bearing != nil else { continue }
+                    let a = t.id == selected ? 1 : coneAlpha
+                    guard a > 0.01 else { continue }
+                    var ctx = ctx
+                    ctx.opacity = a
                     let v = t.effectiveSpeed
                     // dimap: 10-minute look-ahead (ballistics kept to a readable length).
                     let minutes = v > 1500 ? min(10, 250 / v * 60) : 10
