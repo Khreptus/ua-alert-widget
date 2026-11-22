@@ -42,7 +42,11 @@ public extension AirTarget {
 /// Remembers recent fixes per target to derive course and turn rate when a source doesn't send them.
 public final class TargetTracker: @unchecked Sendable {
     public static let shared = TargetTracker()
-    private struct Fix { var lat: Double; var lon: Double; var bearing: Double?; var time: Date; var turn: Double }
+    private struct Fix {
+        var lat: Double; var lon: Double; var bearing: Double?; var time: Date; var turn: Double
+        /// Anchor for the actual course: last point ≥ 2 km back, and the course measured from it.
+        var aLat: Double; var aLon: Double; var aTime: Date; var move: Double?
+    }
     private var last: [String: Fix] = [:]
     /// Last target as delivered to the UI (with its fix time) — to keep motion continuous.
     private var shown: [String: AirTarget] = [:]
@@ -56,21 +60,28 @@ public final class TargetTracker: @unchecked Sendable {
             if let f = last[t.id] {
                 let dtMin = now.timeIntervalSince(f.time) / 60
                 let moved = Geo.distanceKm(lat1: f.lat, lon1: f.lon, lat2: t.lat, lon2: t.lon)
-                // Course from movement when the source has none.
-                if t.bearing == nil, moved > 1.5 { t.bearing = Geo.bearing(lat1: f.lat, lon1: f.lon, lat2: t.lat, lon2: t.lon) }
-                // Turn rate (°/min) from the change of course, smoothed.
-                var turn = f.turn
-                if let b0 = f.bearing, let b1 = t.bearing, dtMin > 0.05 {
-                    let rate = max(-20, min(20, Geo.signedAngle(from: b0, to: b1) / dtMin))
-                    turn = f.turn * 0.3 + rate * 0.7
+                // Actual course = direction of real movement (source headings are often rounded to 5–45°).
+                var aLat = f.aLat, aLon = f.aLon, aTime = f.aTime, move = f.move, turn = f.turn
+                let fromAnchor = Geo.distanceKm(lat1: aLat, lon1: aLon, lat2: t.lat, lon2: t.lon)
+                if fromAnchor >= 2 {
+                    let b = Geo.bearing(lat1: aLat, lon1: aLon, lat2: t.lat, lon2: t.lon)
+                    let mins = max(0.05, now.timeIntervalSince(aTime) / 60)
+                    if let m0 = move {
+                        // Observed turn rate, any size (a shahed can turn all the way round).
+                        let rate = Geo.signedAngle(from: m0, to: b) / mins
+                        turn = f.turn * 0.3 + rate * 0.7
+                    }
+                    move = b; aLat = t.lat; aLon = t.lon; aTime = now
                 }
-                if !t.turnKnown { t.turn = turn }
-                // Keep the previous fix while the target hasn't moved (avoids zero-time deltas).
+                if let m = move, now.timeIntervalSince(aTime) < 240 { t.bearing = m }
+                if t.bearing == nil, moved > 1.5 { t.bearing = Geo.bearing(lat1: f.lat, lon1: f.lon, lat2: t.lat, lon2: t.lon) }
+                // Turn: dimap's own value when it turns; otherwise what we actually observe.
+                if !t.turnKnown || abs(t.turn) < 0.01 { t.turn = turn }
                 let keepOld = moved < 0.15 && dtMin < 1
-                next[t.id] = keepOld ? Fix(lat: f.lat, lon: f.lon, bearing: f.bearing, time: f.time, turn: turn)
-                                     : Fix(lat: t.lat, lon: t.lon, bearing: t.bearing, time: now, turn: turn)
+                next[t.id] = keepOld ? Fix(lat: f.lat, lon: f.lon, bearing: f.bearing, time: f.time, turn: turn, aLat: aLat, aLon: aLon, aTime: aTime, move: move)
+                                     : Fix(lat: t.lat, lon: t.lon, bearing: t.bearing, time: now, turn: turn, aLat: aLat, aLon: aLon, aTime: aTime, move: move)
             } else {
-                next[t.id] = Fix(lat: t.lat, lon: t.lon, bearing: t.bearing, time: now, turn: t.turn)
+                next[t.id] = Fix(lat: t.lat, lon: t.lon, bearing: t.bearing, time: now, turn: t.turn, aLat: t.lat, aLon: t.lon, aTime: now, move: nil)
             }
             // Same fix as before → keep its receive time; new fix → start from now, hiding the jump.
             if let prev = shown[t.id], abs(prev.lat - t.lat) < 1e-6, abs(prev.lon - t.lon) < 1e-6, prev.bearing == t.bearing {

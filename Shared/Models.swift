@@ -122,10 +122,12 @@ public struct Projection: Sendable {
     public var right: [LL] = []
     public var center: [LL] = []
 
-    /// Heading after `t` minutes: turn rate fades out over the horizon, clamped to ±60°.
+    /// Heading after `t` minutes: turn rate fades out over the horizon.
     static func heading(_ t: AirTarget, at m: Double, horizon: Double) -> Double {
         let mm = min(m, horizon)
-        return (t.bearing ?? 0) + max(-60, min(60, t.turn * mm * (1 - mm / (2 * horizon))))
+        // No cap: the projected course can turn through any angle (full 360°).
+        let h = (t.bearing ?? 0) + t.turn * mm * (1 - mm / (2 * horizon))
+        return (h.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360)
     }
 
     public static func cone(_ t: AirTarget, minutes: Double = 10, width: Double = 16) -> Projection? {
